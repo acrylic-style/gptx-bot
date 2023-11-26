@@ -44,12 +44,12 @@ suspend fun main() {
     client.on<MessageCreateEvent> {
         if (message.author?.isBot != false) return@on
         if (!message.mentionedUserIds.contains(client.selfId) && message.referencedMessage?.author?.id != client.selfId) return@on
-        if (!Util.hasValidUserData(message.author!!.id)) {
-            message.reply {
-                content = "Discordアカウントに関連付けられた有効な請求先アカウントがありません。"
-            }
-            return@on
-        }
+//        if (!Util.hasValidUserData(message.author!!.id)) {
+//            message.reply {
+//                content = "Discordアカウントに関連付けられた有効な請求先アカウントがありません。"
+//            }
+//            return@on
+//        }
         val msg = message.reply { content = "Thinking..." }
         var currentMessage = ""
         var lastUpdate = System.currentTimeMillis()
