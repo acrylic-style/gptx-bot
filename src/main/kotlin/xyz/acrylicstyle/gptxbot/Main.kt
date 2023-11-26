@@ -56,11 +56,13 @@ suspend fun main() {
         suspend fun generate(message: Message) {
             Util.createChatCompletions(message).collect { data ->
                 if (data.data == "[DONE]") {
-                    msg.edit {
-                        content = currentMessage
-                        if (currentMessage.length > 500) {
-                            ByteArrayInputStream(currentMessage.toByteArray()).use { stream ->
-                                addFile("output.md", ChannelProvider { stream.toByteReadChannel() })
+                    if (currentMessage.isNotBlank()) {
+                        msg.edit {
+                            content = currentMessage
+                            if (currentMessage.length > 500) {
+                                ByteArrayInputStream(currentMessage.toByteArray()).use { stream ->
+                                    addFile("output.md", ChannelProvider { stream.toByteReadChannel() })
+                                }
                             }
                         }
                     }
@@ -86,7 +88,6 @@ suspend fun main() {
                             }
                             .collect { list += it }
                         ToolCalls.addToolCall(msg.id, ChatMessage.Tool(list.reversed().joinToString("\n"), ToolId(call.id)))
-                        ToolCalls.save()
                     } else if (call.id != null && call.function.name == "get_100_messages_from_referenced_message") {
                         val refMsg = message.referencedMessage
                         if (refMsg == null) {
@@ -108,8 +109,8 @@ suspend fun main() {
                                 ChatMessage.Tool(list.reversed().joinToString("\n"), ToolId(call.id))
                             )
                         }
-                        ToolCalls.save()
                     }
+                    ToolCalls.save()
                 }
                 val delta = response.choices[0].delta.content
                 if (delta != null) {
