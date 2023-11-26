@@ -58,7 +58,14 @@ suspend fun main() {
                 if (data.data == "[DONE]") {
                     if (currentMessage.isNotBlank()) {
                         msg.edit {
-                            content = currentMessage
+                            if (currentMessage.length > 2000) {
+                                content = ""
+                                embed {
+                                    description = currentMessage.capAtLength(4000)
+                                }
+                            } else {
+                                content = currentMessage
+                            }
                             if (currentMessage.length > 500) {
                                 ByteArrayInputStream(currentMessage.toByteArray()).use { stream ->
                                     addFile("output.md", ChannelProvider { stream.toByteReadChannel() })
