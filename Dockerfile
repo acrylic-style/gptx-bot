@@ -8,6 +8,6 @@ FROM eclipse-temurin:17 AS runner
 
 WORKDIR /app
 
-COPY --from=builder /build/libs/SpicyAzisabaBot.jar .
+COPY --from=builder build/libs/SpicyAzisabaBot.jar .
 
 CMD ["java", "-jar", "SpicyAzisabaBot.jar"]
