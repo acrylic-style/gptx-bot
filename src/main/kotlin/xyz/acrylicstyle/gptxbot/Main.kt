@@ -56,9 +56,9 @@ suspend fun main() {
         suspend fun generate(message: Message) {
             Util.createChatCompletions(message).collect { data ->
                 if (data.data == "[DONE]") {
-                    if (currentMessage.length > 500) {
-                        msg.edit {
-                            content = currentMessage
+                    msg.edit {
+                        content = currentMessage
+                        if (currentMessage.length > 500) {
                             ByteArrayInputStream(currentMessage.toByteArray()).use { stream ->
                                 addFile("output.md", ChannelProvider { stream.toByteReadChannel() })
                             }
