@@ -101,7 +101,23 @@ data class SetRemindFunction(val time: String, val period: String? = null, val m
             message,
         )
         saveReminds()
-        ToolCalls.addToolCall(toolCallMessageId, ChatMessage.Tool("Successfully set remind at ${format.format(timeLong)} (every $period afterwards)", ToolId(toolCallId)))
+        if (period != null) {
+            ToolCalls.addToolCall(
+                toolCallMessageId,
+                ChatMessage.Tool(
+                    "Successfully set remind at ${format.format(timeLong)} (every $period afterwards)",
+                    ToolId(toolCallId)
+                )
+            )
+        } else {
+            ToolCalls.addToolCall(
+                toolCallMessageId,
+                ChatMessage.Tool(
+                    "Successfully set remind at ${format.format(timeLong)}",
+                    ToolId(toolCallId)
+                )
+            )
+        }
     }
 
     @Serializable
