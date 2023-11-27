@@ -21,4 +21,5 @@ services:
       CLOUDFLARE_KV_DISCORD_ID: kv namespace id for discord
     volumes:
       - ./tool_calls.json:/app/tool_calls.json
+      - ./reminds.json:/app/reminds.json
 ```

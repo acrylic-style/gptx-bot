@@ -17,11 +17,10 @@ import dev.kord.gateway.PrivilegedIntent
 import dev.kord.rest.builder.message.embed
 import io.ktor.client.request.forms.*
 import io.ktor.utils.io.jvm.javaio.*
-import kotlinx.coroutines.flow.map
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.decodeFromJsonElement
-import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
+import xyz.acrylicstyle.gptxbot.function.Function
+import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
 import java.io.ByteArrayInputStream
 import java.io.File
 
@@ -38,6 +37,7 @@ suspend fun main() {
     }
 
     client.on<ReadyEvent> {
+        SetRemindFunction.load(client)
         logger.info("Logged in as ${client.getSelf().username}")
     }
 
@@ -53,6 +53,7 @@ suspend fun main() {
         val msg = message.reply { content = "Thinking..." }
         var currentMessage = ""
         var lastUpdate = System.currentTimeMillis()
+        val toolCalls = mutableListOf<AssistantToolCallData>()
         suspend fun generate(message: Message) {
             Util.createChatCompletions(message).collect { data ->
                 if (data.data == "[DONE]") {
@@ -74,50 +75,42 @@ suspend fun main() {
                         }
                     }
                     if (ToolCalls.toolCalls[msg.id] != null && currentMessage.isBlank()) {
+                        toolCalls.forEach { call ->
+                            if (call.function?.name?.isNotBlank() == true) {
+                                val obj = if (call.function!!.arguments.isNotBlank() && call.function!!.arguments != "{}") {
+                                    val arguments = json.parseToJsonElement(call.function!!.arguments)
+                                    JsonObject(arguments.jsonObject + mapOf("type" to JsonPrimitive(call.function!!.name)))
+                                } else {
+                                    JsonObject(mapOf("type" to JsonPrimitive(call.function!!.name)))
+                                }
+                                val function = json.decodeFromJsonElement<Function>(obj)
+                                function.call(message, msg.id, call.id)
+                            }
+                        }
+                        ToolCalls.save()
                         generate(msg)
                     }
                     return@collect
                 }
                 val response = json.decodeFromString<StreamResponse>(data.data)
-                if (!response.choices[0].delta.isToolCallEmpty()) {
-                    ToolCalls.addToolCall(
-                        msg.id,
-                        json.decodeFromJsonElement<ChatMessage>(json.encodeToJsonElement(response.choices[0].delta))
-                    )
-                }
                 response.choices[0].delta.toolCalls.forEach { call ->
-                    if (call.id != null && call.function.name == "get_100_messages") {
-                        val list = mutableListOf<String>()
-                        message.getChannel().getMessagesBefore(message.id, 100)
-                            .map {
-                                val bot = if (it.author?.isBot == true) " (Bot)" else ""
-                                "${it.author?.username ?: "Unknown"}$bot: ${it.content}"
-                            }
-                            .collect { list += it }
-                        ToolCalls.addToolCall(msg.id, ChatMessage.Tool(list.reversed().joinToString("\n"), ToolId(call.id)))
-                    } else if (call.id != null && call.function.name == "get_100_messages_from_referenced_message") {
-                        val refMsg = message.referencedMessage
-                        if (refMsg == null) {
+                    if (call.id != null) {
+                        if (toolCalls.size <= call.index) {
                             ToolCalls.addToolCall(
                                 msg.id,
-                                ChatMessage.Tool("No referenced message found", ToolId(call.id))
+                                json.decodeFromJsonElement<ChatMessage>(json.encodeToJsonElement(response.choices[0].delta))
                             )
+                            toolCalls.add(AssistantToolCallData(call.id))
                         } else {
-                            val list = mutableListOf<String>()
-                            //list += "${refMsg.author?.username ?: "Unknown"}${if (refMsg.author?.isBot == true) " (Bot)" else ""}: ${refMsg.content}"
-                            message.getChannel().getMessagesBefore(refMsg.id, 100)
-                                .map {
-                                    val bot = if (it.author?.isBot == true) " (Bot)" else ""
-                                    "${it.author?.username ?: "Unknown"}$bot: ${it.content}"
-                                }
-                                .collect { list += it }
-                            ToolCalls.addToolCall(
-                                msg.id,
-                                ChatMessage.Tool(list.reversed().joinToString("\n"), ToolId(call.id))
-                            )
+                            toolCalls[call.index] = AssistantToolCallData(call.id)
                         }
                     }
-                    ToolCalls.save()
+                    if (call.function.name != null) {
+                        toolCalls[call.index].getAndSetFunction().name = call.function.name
+                    }
+                    if (call.function.arguments != null) {
+                        toolCalls[call.index].getAndSetFunction().arguments += call.function.arguments
+                    }
                 }
                 val delta = response.choices[0].delta.content
                 if (delta != null) {

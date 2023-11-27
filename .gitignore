@@ -44,3 +44,4 @@ bin/
 
 config.yml
 tool_calls.json
+reminds.json

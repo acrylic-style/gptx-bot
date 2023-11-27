@@ -20,6 +20,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object Util {
+    private const val YEAR = 1000L * 60L * 60L * 24L * 365L
+    private const val MONTH = 1000L * 60L * 60L * 24L * 30L
+    private const val DAY = 1000L * 60L * 60L * 24L
+    private const val HOUR = 1000L * 60L * 60L
+    private const val MINUTE = 1000L * 60L
+    private const val SECOND = 1000L
+
     suspend fun getUserId(id: Snowflake) = BotConfig.instance.getCloudflareKVDiscord().get(id.toString())
 
     suspend fun getUserData(id: Snowflake) =
@@ -90,8 +97,62 @@ object Util {
                         JsonObject(mapOf(
                             "type" to JsonPrimitive("function"),
                             "function" to JsonObject(mapOf(
-                                "name" to JsonPrimitive("get_100_messages"),
+                                "name" to JsonPrimitive("get_messages"),
                                 "description" to JsonPrimitive("Get 100 messages before the current message"),
+                                "parameters" to JsonObject(mapOf(
+                                    "type" to JsonPrimitive("object"),
+                                    "properties" to JsonObject(mapOf(
+                                        "count" to JsonObject(mapOf(
+                                            "type" to JsonPrimitive("number"),
+                                            "description" to JsonPrimitive(
+                                                "Number of messages to get (range: 100 - 1000) (default: 100)"
+                                            ),
+                                        )),
+                                        "ref" to JsonObject(mapOf(
+                                            "type" to JsonPrimitive("boolean"),
+                                            "description" to JsonPrimitive(
+                                                "Whether to get messages from the referenced message (default: false)"
+                                            ),
+                                        )),
+                                    )),
+                                    "required" to JsonArray(emptyList()),
+                                )),
+                            ))
+                        )),
+                        JsonObject(mapOf(
+                            "type" to JsonPrimitive("function"),
+                            "function" to JsonObject(mapOf(
+                                "name" to JsonPrimitive("set_remind"),
+                                "description" to JsonPrimitive("Set a reminder with the given time. Message is optional."),
+                                "parameters" to JsonObject(mapOf(
+                                    "type" to JsonPrimitive("object"),
+                                    "properties" to JsonObject(mapOf(
+                                        "time" to JsonObject(mapOf(
+                                            "type" to JsonPrimitive("string"),
+                                            "description" to JsonPrimitive(
+                                                "Time to remind at (in the format of yyyy/MM/dd HH:mm:ss, or XyXmoXdXhXmXs where X is an number, each units can be omitted). If user says 'one year', you must say '1y'"
+                                            ),
+                                        )),
+                                        "period" to JsonObject(mapOf(
+                                            "type" to JsonPrimitive("string"),
+                                            "description" to JsonPrimitive(
+                                                "Period to remind with (in the format of XyXmoXdXhXmXs where X is an number, each units can be omitted) (optional; if not specified, it will be a one-time reminder)"
+                                            ),
+                                        )),
+                                        "message" to JsonObject(mapOf(
+                                            "type" to JsonPrimitive("string"),
+                                            "description" to JsonPrimitive("Message to remind with"),
+                                        )),
+                                    )),
+                                    "required" to JsonArray(listOf("time").map { JsonPrimitive(it) }),
+                                )),
+                            ))
+                        )),
+                        JsonObject(mapOf(
+                            "type" to JsonPrimitive("function"),
+                            "function" to JsonObject(mapOf(
+                                "name" to JsonPrimitive("list_remind"),
+                                "description" to JsonPrimitive("List all reminds"),
                                 "parameters" to JsonObject(mapOf(
                                     "type" to JsonPrimitive("object"),
                                     "properties" to JsonObject(emptyMap()),
@@ -102,8 +163,25 @@ object Util {
                         JsonObject(mapOf(
                             "type" to JsonPrimitive("function"),
                             "function" to JsonObject(mapOf(
-                                "name" to JsonPrimitive("get_100_messages_from_referenced_message"),
-                                "description" to JsonPrimitive("Get 100 messages before the referenced message (the message the user replied to)"),
+                                "name" to JsonPrimitive("delete_remind"),
+                                "description" to JsonPrimitive("Delete a remind with the given index"),
+                                "parameters" to JsonObject(mapOf(
+                                    "type" to JsonPrimitive("object"),
+                                    "properties" to JsonObject(mapOf(
+                                        "index" to JsonObject(mapOf(
+                                            "type" to JsonPrimitive("string"),
+                                            "description" to JsonPrimitive("Index of the remind to delete (starts from 1)"),
+                                        )),
+                                    )),
+                                    "required" to JsonArray(listOf("index").map { JsonPrimitive(it) }),
+                                )),
+                            ))
+                        )),
+                        JsonObject(mapOf(
+                            "type" to JsonPrimitive("function"),
+                            "function" to JsonObject(mapOf(
+                                "name" to JsonPrimitive("clear_remind"),
+                                "description" to JsonPrimitive("Clear all reminds (requires confirmation)"),
                                 "parameters" to JsonObject(mapOf(
                                     "type" to JsonPrimitive("object"),
                                     "properties" to JsonObject(emptyMap()),
@@ -124,6 +202,42 @@ object Util {
             )
         )
     }
+
+    fun processTime(s: String): Long {
+        var time = 0L
+        var rawNumber = ""
+        val reader = StringReader(s)
+        while (!reader.isEOF()) {
+            val c = reader.read(1).first()
+            if (c.isDigit() || c == '.') {
+                rawNumber += c
+            } else {
+                if (rawNumber.isEmpty()) {
+                    throw IllegalArgumentException("Unexpected non-digit character: '$c' at index ${reader.index}")
+                }
+                // mo
+                if (c == 'm' && !reader.isEOF() && reader.peek() == 'o') {
+                    reader.skip(1)
+                    time += MONTH * rawNumber.toLong()
+                    rawNumber = ""
+                    continue
+                }
+                // y(ear), d(ay), h(our), m(inute), s(econd)
+                time += when (c) {
+                    'y' -> (YEAR * rawNumber.toDouble()).toLong()
+                    // mo is not here
+                    'w' -> (7 * DAY * rawNumber.toDouble()).toLong()
+                    'd' -> (DAY * rawNumber.toDouble()).toLong()
+                    'h' -> (HOUR * rawNumber.toDouble()).toLong()
+                    'm' -> (MINUTE * rawNumber.toDouble()).toLong()
+                    's' -> (SECOND * rawNumber.toDouble()).toLong()
+                    else -> throw IllegalArgumentException("Unexpected character: '$c' at index ${reader.index}")
+                }
+                rawNumber = ""
+            }
+        }
+        return time
+    }
 }
 
 fun List<ChatMessage>.hasImage() =
@@ -132,7 +246,12 @@ fun List<ChatMessage>.hasImage() =
 suspend fun Message.toChatMessageList(root: Boolean = true): List<ChatMessage> {
     val messages = mutableListOf<ChatMessage>()
     if (root && author != null) {
-        Util.getUserData(author!!.id)?.let {
+        val id = if (author!!.id == kord.selfId && referencedMessage?.author?.isBot == false) {
+            referencedMessage!!.author!!.id
+        } else {
+            author!!.id
+        }
+        Util.getUserData(id)?.let {
             it.jsonObject["default_instruction"]?.jsonPrimitive?.contentOrNull?.let { instruction ->
                 messages += ChatMessage.System(instruction)
             }
