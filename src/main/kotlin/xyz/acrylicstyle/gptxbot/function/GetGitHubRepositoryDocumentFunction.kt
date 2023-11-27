@@ -11,8 +11,6 @@ import java.util.*
 @SerialName("get_github_repository_document")
 data class GetGitHubRepositoryDocumentFunction(val url: String = ""): Function {
     override suspend fun call(originalMessage: Message, addToolCallOutput: (String) -> Unit) {
-        println("called get_github_repository_document")
-
         if (url.isEmpty()) {
             addToolCallOutput("URL must not be empty.")
             return
@@ -35,40 +33,34 @@ data class GetGitHubRepositoryDocumentFunction(val url: String = ""): Function {
             return
         }
 
-        println("create repository client")
+        //  get repository client
         val repositoryClient = githubClient!!.createRepositoryClient(owner, repo)
 
-        println("searching for markdown files")
-        //  get .md and .mdx files
-        val files = getMarkdownFiles(repositoryClient, "")
+        try {
+            //  get .md and .mdx files
+            val readme = getReadmeFile(repositoryClient)
 
-        println("outputting")
-        addToolCallOutput(files.joinToString("\n"))
+            if (readme.isEmpty()) {
+                addToolCallOutput("README.md not found.")
+                return
+            }
+
+            addToolCallOutput(readme)
+        } catch (e: Exception) {
+            addToolCallOutput("Repository not found or no access permission.")
+        }
     }
 }
 
-private fun getMarkdownFiles(repositoryClient: RepositoryClient, path: String): MutableList<String> {
-    val result = mutableListOf<String>()
-
+private fun getReadmeFile(repositoryClient: RepositoryClient): String {
     //  file contents
-    val list = repositoryClient.getFolderContent(path).get()
+    val list = repositoryClient.getFolderContent("").get()
 
-    for (content in list) {
-        if (content.type() == "dir") {
-            result.addAll(getMarkdownFiles(repositoryClient, content.path() ?: continue))
-        }
-        if (content.type() == "file" && content.name() != null && (content.name()!!.endsWith(".md") || content.name()!!.endsWith(".mdx"))) {
-            try {
-                val markdown = repositoryClient.getFileContent(content.path() ?: continue).get()
-                val decoder = Base64.getDecoder()
-                val markdownContent = "Title: ${content.name()}\nContent:\n${decoder.decode(markdown.content())}\n"
-                result.add(markdownContent)
+    val readmeFile = list.find { it.name().equals("README.md", ignoreCase = true) || it.name().equals("README.mdx", ignoreCase = true) } ?: return ""
+    //  get file content
+    val markdown = repositoryClient.getFileContent(readmeFile.path()).get() ?: return ""
+    //  decode base64
+    val decoder = Base64.getDecoder()
 
-                println("added $markdownContent")
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-    }
-    return result
+    return String(decoder.decode(markdown.content()!!.replace("\n", "")))
 }

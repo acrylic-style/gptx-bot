@@ -196,18 +196,18 @@ object Util {
                             "type" to JsonPrimitive("function"),
                             "function" to JsonObject(mapOf(
                                 "name" to JsonPrimitive("get_github_repository_document"),
-                                "description" to JsonPrimitive("Get all markdown files from the given GitHub repository url"),
+                                "description" to JsonPrimitive("Get readme file from the given GitHub repository url"),
                                 "parameters" to JsonObject(mapOf(
                                     "type" to JsonPrimitive("object"),
                                     "properties" to JsonObject(mapOf(
-                                        "count" to JsonObject(mapOf(
+                                        "url" to JsonObject(mapOf(
                                             "type" to JsonPrimitive("string"),
                                             "description" to JsonPrimitive(
                                                 "GitHub repository url (starts with https://github.com/...)"
                                             ),
                                         )),
                                     )),
-                                    "required" to JsonArray(emptyList()),
+                                    "required" to JsonArray(listOf("url").map { JsonPrimitive(it) }),
                                 )),
                             ))
                         )),
