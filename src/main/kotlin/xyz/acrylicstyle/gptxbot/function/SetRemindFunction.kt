@@ -1,7 +1,5 @@
 package xyz.acrylicstyle.gptxbot.function
 
-import com.aallam.openai.api.chat.ChatMessage
-import com.aallam.openai.api.chat.ToolId
 import dev.kord.common.entity.AllowedMentionType
 import dev.kord.common.entity.Snowflake
 import dev.kord.core.Kord
@@ -12,7 +10,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import xyz.acrylicstyle.gptxbot.ToolCalls
 import xyz.acrylicstyle.gptxbot.Util
 import java.io.File
 import java.text.SimpleDateFormat
@@ -76,15 +73,14 @@ data class SetRemindFunction(val time: String, val period: String? = null, val m
         }
     }
 
-    override suspend fun call(originalMessage: Message, toolCallMessageId: Snowflake, toolCallId: String) {
+    override suspend fun call(originalMessage: Message, addToolCallOutput: (String) -> Unit) {
         val timeLong = try {
             format.parse(time).time
         } catch (e: Exception) {
             try {
                 System.currentTimeMillis() + Util.processTime(time)
             } catch (e: RuntimeException) {
-                ToolCalls.addToolCall(toolCallMessageId, ChatMessage.Tool("Invalid time format.", ToolId(toolCallId)))
-                return
+                return addToolCallOutput("Invalid time format.")
             }
         }
         val periodLong = period?.let { format.parse(it).time }
@@ -102,21 +98,9 @@ data class SetRemindFunction(val time: String, val period: String? = null, val m
         )
         saveReminds()
         if (period != null) {
-            ToolCalls.addToolCall(
-                toolCallMessageId,
-                ChatMessage.Tool(
-                    "Successfully set remind at ${format.format(timeLong)} (every $period afterwards)",
-                    ToolId(toolCallId)
-                )
-            )
+            addToolCallOutput("Successfully set remind at ${format.format(timeLong)} (every $period afterwards)")
         } else {
-            ToolCalls.addToolCall(
-                toolCallMessageId,
-                ChatMessage.Tool(
-                    "Successfully set remind at ${format.format(timeLong)}",
-                    ToolId(toolCallId)
-                )
-            )
+            addToolCallOutput("Successfully set remind at ${format.format(timeLong)}")
         }
     }
 

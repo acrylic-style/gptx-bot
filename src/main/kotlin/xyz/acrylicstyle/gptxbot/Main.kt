@@ -2,6 +2,7 @@
 package xyz.acrylicstyle.gptxbot
 
 import com.aallam.openai.api.chat.ChatMessage
+import com.aallam.openai.api.chat.ToolId
 import dev.kord.core.Kord
 import dev.kord.core.behavior.edit
 import dev.kord.core.behavior.reply
@@ -93,7 +94,7 @@ suspend fun main() {
                         }
                     }
                     if (ToolCalls.toolCalls[msg.id] != null && currentMessage.isBlank()) {
-                        toolCalls.forEach { call ->
+                        toolCalls.forEachIndexed { index, call ->
                             if (call.function?.name?.isNotBlank() == true) {
                                 val obj = if (call.function!!.arguments.isNotBlank() && call.function!!.arguments != "{}") {
                                     val arguments = json.parseToJsonElement(call.function!!.arguments)
@@ -102,9 +103,15 @@ suspend fun main() {
                                     JsonObject(mapOf("type" to JsonPrimitive(call.function!!.name)))
                                 }
                                 val function = json.decodeFromJsonElement<Function>(obj)
-                                function.call(message, msg.id, call.id)
+                                var added = false
+                                function.call(message) {
+                                    if (added) error("Already added")
+                                    added = true
+                                    ToolCalls.addToolCall((index * 2) + 1, msg.id, ChatMessage.Tool(it, ToolId(call.id)))
+                                }
                             }
                         }
+                        println(ToolCalls.toolCalls[msg.id])
                         ToolCalls.save()
                         generate(msg)
                     }

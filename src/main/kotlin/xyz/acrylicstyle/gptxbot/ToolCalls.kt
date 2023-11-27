@@ -9,8 +9,16 @@ import java.io.File
 object ToolCalls {
     val toolCalls = mutableMapOf<Snowflake, List<ChatMessage>>()
 
+    fun addToolCall(index: Int, id: Snowflake, message: ChatMessage) {
+        val list = toolCalls[id]?.toMutableList() ?: mutableListOf()
+        list.add(index, message)
+        toolCalls[id] = list
+    }
+
     fun addToolCall(id: Snowflake, message: ChatMessage) {
-        toolCalls[id] = toolCalls[id]?.let { it + message } ?: listOf(message)
+        val list = toolCalls[id]?.toMutableList() ?: mutableListOf()
+        list.add(message)
+        toolCalls[id] = list
     }
 
     init {
