@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
+import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -130,7 +131,7 @@ object Util {
                                         "time" to JsonObject(mapOf(
                                             "type" to JsonPrimitive("string"),
                                             "description" to JsonPrimitive(
-                                                "Time to remind at (in the format of yyyy/MM/dd HH:mm:ss, or XyXmoXdXhXmXs where X is an number, each units can be omitted). If user says 'one year', you must say '1y'"
+                                                "Time to remind at (in the format of yyyy/MM/dd HH:mm:ss, or XyXmoXdXhXmXs where X is an number, each units can be omitted). If user says 'one year', you must say '1y'. Current time is: ${SetRemindFunction.format.format(System.currentTimeMillis())}"
                                             ),
                                         )),
                                         "period" to JsonObject(mapOf(
