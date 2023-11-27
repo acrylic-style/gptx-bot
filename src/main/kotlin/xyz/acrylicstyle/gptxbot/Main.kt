@@ -2,11 +2,12 @@
 package xyz.acrylicstyle.gptxbot
 
 import com.aallam.openai.api.chat.ChatMessage
-import com.aallam.openai.api.chat.ToolId
 import dev.kord.core.Kord
 import dev.kord.core.behavior.edit
 import dev.kord.core.behavior.reply
 import dev.kord.core.entity.Message
+import dev.kord.core.entity.channel.TextChannel
+import dev.kord.core.entity.channel.thread.ThreadChannel
 import dev.kord.core.event.gateway.ReadyEvent
 import dev.kord.core.event.message.MessageCreateEvent
 import dev.kord.core.on
@@ -43,14 +44,31 @@ suspend fun main() {
 
     client.on<MessageCreateEvent> {
         if (message.author?.isBot != false) return@on
-        if (!message.mentionedUserIds.contains(client.selfId) && message.referencedMessage?.author?.id != client.selfId) return@on
+        if (message.content.isBlank()) return@on
+        if (!message.mentionedUserIds.contains(client.selfId) && message.referencedMessage?.author?.id != client.selfId) {
+            val thread = message.getChannelOrNull() as? ThreadChannel ?: return@on
+            if (thread.ownerId != client.selfId) return@on
+        }
 //        if (!Util.hasValidUserData(message.author!!.id)) {
 //            message.reply {
 //                content = "Discordアカウントに関連付けられた有効な請求先アカウントがありません。"
 //            }
 //            return@on
 //        }
-        val msg = message.reply { content = "Thinking..." }
+        val msg = if (BotConfig.instance.createThread && message.getChannel() !is ThreadChannel && message.getChannel() is TextChannel) {
+            (message.getChannel() as TextChannel)
+                .startPublicThreadWithMessage(message.id, message.content.replace("<@!?${kord.selfId}>".toRegex(), "").trim().take(50))
+                .createMessage("Thinking...")
+        } else if (message.getChannel() is ThreadChannel) {
+            val thread = message.getChannel() as ThreadChannel
+            if (thread.ownerId != client.selfId) {
+                message.reply { content = "Thinking..." }
+            } else {
+                thread.createMessage("Thinking...")
+            }
+        } else {
+            message.reply { content = "Thinking..." }
+        }
         var currentMessage = ""
         var lastUpdate = System.currentTimeMillis()
         val toolCalls = mutableListOf<AssistantToolCallData>()

@@ -19,6 +19,7 @@ services:
       CLOUDFLARE_ACCOUNT_ID: cloudflare account id
       CLOUDFLARE_KV_USERS_ID: kv namespace id for users
       CLOUDFLARE_KV_DISCORD_ID: kv namespace id for discord
+      CREATE_THREAD: "true"
     volumes:
       - ./tool_calls.json:/app/tool_calls.json
       - ./reminds.json:/app/reminds.json

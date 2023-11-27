@@ -9,11 +9,12 @@ import com.aallam.openai.api.model.ModelId
 import com.aallam.openai.client.OpenAI
 import dev.kord.common.entity.Snowflake
 import dev.kord.core.entity.Message
+import dev.kord.core.entity.channel.ThreadParentChannel
+import dev.kord.core.entity.channel.TopGuildMessageChannel
+import dev.kord.core.entity.channel.thread.ThreadChannel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
@@ -245,10 +246,18 @@ fun List<ChatMessage>.hasImage() =
     any { it.role == Role.User && it.messageContent is ListContent && (it.messageContent as ListContent).content.any { p -> p is ImagePart } }
 
 suspend fun Message.toChatMessageList(root: Boolean = true): List<ChatMessage> {
+    val thread = getChannelOrNull() as? ThreadChannel
+    val starterMessage = (thread?.getParentOrNull() as? TopGuildMessageChannel)?.getMessage(thread.id)
     val messages = mutableListOf<ChatMessage>()
     if (root && author != null) {
-        val id = if (author!!.id == kord.selfId && referencedMessage?.author?.isBot == false) {
-            referencedMessage!!.author!!.id
+        val id = if (author!!.id == kord.selfId) {
+            if (referencedMessage?.author?.isBot == false) {
+                referencedMessage!!.author!!.id
+            } else if (thread != null && thread.ownerId == kord.selfId && starterMessage != null && starterMessage.author != null) {
+                starterMessage.author!!.id
+            } else {
+                author!!.id
+            }
         } else {
             author!!.id
         }
@@ -257,8 +266,15 @@ suspend fun Message.toChatMessageList(root: Boolean = true): List<ChatMessage> {
                 messages += ChatMessage.System(instruction)
             }
         }
+        if (thread != null && thread.ownerId == kord.selfId) {
+            starterMessage?.let { messages += it.toChatMessageList(false) }
+            thread.getMessagesBefore(Snowflake.max, 50)
+                .collect { messages += it.toChatMessageList(false) }
+        }
     }
-    referencedMessage?.toChatMessageList(false)?.let { messages += it }
+    if (thread == null) {
+        referencedMessage?.toChatMessageList(false)?.let { messages += it }
+    }
     ToolCalls.toolCalls[id]?.let { messages += it }
     if (ToolCalls.toolCalls[id] == null) {
         if (author?.id == kord.selfId) {
