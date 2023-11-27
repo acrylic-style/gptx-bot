@@ -7,9 +7,9 @@ import com.aallam.openai.api.chat.ListContent
 import com.aallam.openai.api.core.Role
 import com.aallam.openai.api.model.ModelId
 import com.aallam.openai.client.OpenAI
+import com.spotify.github.v3.clients.GitHubClient
 import dev.kord.common.entity.Snowflake
 import dev.kord.core.entity.Message
-import dev.kord.core.entity.channel.ThreadParentChannel
 import dev.kord.core.entity.channel.TopGuildMessageChannel
 import dev.kord.core.entity.channel.thread.ThreadChannel
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +19,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 
 object Util {
@@ -191,6 +192,25 @@ object Util {
                                 )),
                             ))
                         )),
+                        JsonObject(mapOf(
+                            "type" to JsonPrimitive("function"),
+                            "function" to JsonObject(mapOf(
+                                "name" to JsonPrimitive("get_github_repository_document"),
+                                "description" to JsonPrimitive("Get all markdown files from the given GitHub repository url"),
+                                "parameters" to JsonObject(mapOf(
+                                    "type" to JsonPrimitive("object"),
+                                    "properties" to JsonObject(mapOf(
+                                        "count" to JsonObject(mapOf(
+                                            "type" to JsonPrimitive("string"),
+                                            "description" to JsonPrimitive(
+                                                "GitHub repository url (starts with https://github.com/...)"
+                                            ),
+                                        )),
+                                    )),
+                                    "required" to JsonArray(emptyList()),
+                                )),
+                            ))
+                        )),
                     ))
                 )
             }
@@ -313,4 +333,16 @@ fun String.capAtLength(maxStringLength: Int = 1900, linePrefix: String = ""): St
         lines.add(linePrefix + line)
     }
     return lines.reversed().joinToString("\n")
+}
+
+/**
+ * GitHub client for fetching documentation
+ */
+val githubClient: GitHubClient? by lazy {
+    if (BotConfig.instance.githubAccessToken.isEmpty()) {
+        return@lazy null
+    }
+
+    //  create github client
+    GitHubClient.create(URI.create("https://api.github.com/"), BotConfig.instance.githubAccessToken)
 }
