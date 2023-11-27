@@ -16,6 +16,7 @@ dependencies {
     implementation("org.slf4j:slf4j-simple:2.0.1")
     implementation("com.charleskorn.kaml:kaml:0.55.0") // YAML support for kotlinx.serialization
     implementation("com.aallam.openai:openai-client:3.6.0")
+    implementation("com.spotify:github-client:0.2.0")
 }
 
 tasks {

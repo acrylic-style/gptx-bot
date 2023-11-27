@@ -17,6 +17,7 @@ data class BotConfig(
     val cloudflareKvUsersId: String = System.getenv("CLOUDFLARE_KV_USERS_ID") ?: "",
     val cloudflareKvDiscordId: String = System.getenv("CLOUDFLARE_KV_DISCORD_ID") ?: "",
     val createThread: Boolean = System.getenv("CREATE_THREAD").toBooleanStrictOrNull() ?: false,
+    val githubAccessToken: String = System.getenv("GITHUB_ACCESS_TOKEN") ?: "",
 ) {
     companion object {
         lateinit var instance: BotConfig
