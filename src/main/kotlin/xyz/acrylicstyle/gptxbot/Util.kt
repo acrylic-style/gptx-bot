@@ -81,6 +81,7 @@ object Util {
         val messageList = message.toChatMessageList()
         val hasImage = messageList.hasImage()
         val messages = messageList.let { Json.encodeToJsonElement(it) }
+        println(messages)
         val body = JsonObject(
             if (hasImage) {
                 mapOf(
@@ -225,8 +226,14 @@ object Util {
                                                 "URL to get web contents from (starts with https://)"
                                             ),
                                         )),
+                                        "query" to JsonObject(mapOf(
+                                            "type" to JsonPrimitive("string"),
+                                            "description" to JsonPrimitive(
+                                                "Search query to get data related to the given query (usually this is an user input without url)"
+                                            ),
+                                        )),
                                     )),
-                                    "required" to JsonArray(listOf("url").map { JsonPrimitive(it) }),
+                                    "required" to JsonArray(listOf("url", "query").map { JsonPrimitive(it) }),
                                 )),
                             ))
                         )),
@@ -317,15 +324,26 @@ suspend fun Message.toChatMessageList(root: Boolean = true): List<ChatMessage> {
     ToolCalls.toolCalls[id]?.let { messages += it }
     if (ToolCalls.toolCalls[id] == null) {
         if (author?.id == kord.selfId) {
-            messages += ChatMessage.Assistant(content)
+            if (content.isNotBlank()) {
+                messages += ChatMessage.Assistant(content)
+            }
         } else {
-            messages += ChatMessage.User(content.replace("<@!?${kord.selfId}>".toRegex(), "").trim())
-            attachments.forEach { attachment ->
+            val trimmedContent = content.replace("<@!?${kord.selfId}>".toRegex(), "").trim()
+            if (trimmedContent.isNotBlank()) {
+                messages += ChatMessage.User(trimmedContent)
+            }
+            attachments.mapNotNull { attachment ->
                 val filename = attachment.filename.lowercase()
                 if (filename.endsWith(".png") || filename.endsWith(".jpg") || filename.endsWith(".jpeg") ||
                     filename.endsWith(".webp") || filename.endsWith(".gif")
                 ) {
-                    messages += ChatMessage.User(listOf(ImagePart(attachment.url)))
+                    ImagePart(attachment.url)
+                } else {
+                    null
+                }
+            }.let {
+                if (it.isNotEmpty()) {
+                    messages += ChatMessage.User(it)
                 }
             }
         }

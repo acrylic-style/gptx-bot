@@ -19,6 +19,7 @@ dependencies {
     implementation("com.spotify:github-client:0.2.0")
     implementation("it.skrape:skrapeit:1.3.0-alpha.1")
     implementation("io.github.furstenheim:copy_down:1.1")   // Convert HTML to Markdown
+    implementation("com.github.jelmerk:hnswlib-core:1.1.0")
 }
 
 tasks {
