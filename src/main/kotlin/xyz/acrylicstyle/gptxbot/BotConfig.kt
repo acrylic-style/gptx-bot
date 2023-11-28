@@ -17,10 +17,10 @@ data class BotConfig(
     val cloudflareAccountId: String = System.getenv("CLOUDFLARE_ACCOUNT_ID") ?: "",
     val cloudflareKvUsersId: String = System.getenv("CLOUDFLARE_KV_USERS_ID") ?: "",
     val cloudflareKvDiscordId: String = System.getenv("CLOUDFLARE_KV_DISCORD_ID") ?: "",
-    val createThread: Boolean = System.getenv("CREATE_THREAD").toBooleanStrictOrNull() ?: false,
+    val createThread: Boolean = System.getenv("CREATE_THREAD")?.toBooleanStrictOrNull() ?: false,
     val githubAccessToken: String = System.getenv("GITHUB_ACCESS_TOKEN") ?: "",
     @YamlComment("Use vector search when browsing the web contents. This feature helps reduce the token usage and reduce the bill, at the cost of cutting the accuracy.")
-    val useVectorSearch: Boolean = System.getenv("USE_VECTOR_SEARCH").toBooleanStrictOrNull() ?: false,
+    val useVectorSearch: Boolean = System.getenv("USE_VECTOR_SEARCH")?.toBooleanStrictOrNull() ?: false,
 ) {
     companion object {
         lateinit var instance: BotConfig

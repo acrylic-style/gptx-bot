@@ -73,6 +73,7 @@ suspend fun main() {
         var currentMessage = ""
         var lastUpdate = System.currentTimeMillis()
         suspend fun generate(message: Message) {
+            val initialToolCallIndex = ToolCalls.toolCalls[msg.id]?.size ?: 0
             val toolCalls = mutableListOf<AssistantToolCallData>()
             Util.createChatCompletions(message).collect { data ->
                 if (data.data == "[DONE]") {
@@ -107,7 +108,7 @@ suspend fun main() {
                                 function.call(message) {
                                     if (added) error("Already added")
                                     added = true
-                                    ToolCalls.addToolCall((index * 2) + 1, msg.id, ChatMessage.Tool(it, ToolId(call.id)))
+                                    ToolCalls.addToolCall(initialToolCallIndex + (index * 2) + 1, msg.id, ChatMessage.Tool(it, ToolId(call.id)))
                                 }
                             }
                         }
@@ -121,6 +122,7 @@ suspend fun main() {
                 response.choices[0].delta.toolCalls.forEach { call ->
                     if (call.id != null) {
                         if (toolCalls.size <= call.index) {
+                            println("Adding assistant tool call: " + json.encodeToJsonElement(response.choices[0].delta))
                             ToolCalls.addToolCall(
                                 msg.id,
                                 json.decodeFromJsonElement<ChatMessage>(json.encodeToJsonElement(response.choices[0].delta))
