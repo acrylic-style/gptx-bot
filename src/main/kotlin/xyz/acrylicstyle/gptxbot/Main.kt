@@ -47,8 +47,9 @@ suspend fun main() {
         if (message.author?.isBot != false) return@on
         if (message.content.isBlank()) return@on
         if (!message.mentionedUserIds.contains(client.selfId) && message.referencedMessage?.author?.id != client.selfId) {
-            val thread = message.getChannelOrNull() as? ThreadChannel ?: return@on
-            if (thread.ownerId != client.selfId) return@on
+//            val thread = message.getChannelOrNull() as? ThreadChannel ?: return@on
+//            if (thread.ownerId != client.selfId) return@on
+            return@on
         }
 //        if (!Util.hasValidUserData(message.author!!.id)) {
 //            message.reply {
