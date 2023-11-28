@@ -211,6 +211,25 @@ object Util {
                                 )),
                             ))
                         )),
+                        JsonObject(mapOf(
+                            "type" to JsonPrimitive("function"),
+                            "function" to JsonObject(mapOf(
+                                "name" to JsonPrimitive("get_web_contents_by_url"),
+                                "description" to JsonPrimitive("Get web contents from the given url"),
+                                "parameters" to JsonObject(mapOf(
+                                    "type" to JsonPrimitive("object"),
+                                    "properties" to JsonObject(mapOf(
+                                        "url" to JsonObject(mapOf(
+                                            "type" to JsonPrimitive("string"),
+                                            "description" to JsonPrimitive(
+                                                "URL to get web contents from (starts with https://)"
+                                            ),
+                                        )),
+                                    )),
+                                    "required" to JsonArray(listOf("url").map { JsonPrimitive(it) }),
+                                )),
+                            ))
+                        )),
                     ))
                 )
             }
