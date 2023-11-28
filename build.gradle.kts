@@ -17,6 +17,8 @@ dependencies {
     implementation("com.charleskorn.kaml:kaml:0.55.0") // YAML support for kotlinx.serialization
     implementation("com.aallam.openai:openai-client:3.6.0")
     implementation("com.spotify:github-client:0.2.0")
+    implementation("it.skrape:skrapeit:1.3.0-alpha.1")
+    implementation("io.github.furstenheim:copy_down:1.1")   // Convert HTML to Markdown
 }
 
 tasks {
