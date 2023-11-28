@@ -72,8 +72,8 @@ suspend fun main() {
         }
         var currentMessage = ""
         var lastUpdate = System.currentTimeMillis()
-        val toolCalls = mutableListOf<AssistantToolCallData>()
         suspend fun generate(message: Message) {
+            val toolCalls = mutableListOf<AssistantToolCallData>()
             Util.createChatCompletions(message).collect { data ->
                 if (data.data == "[DONE]") {
                     if (currentMessage.isNotBlank()) {
