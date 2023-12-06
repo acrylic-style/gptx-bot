@@ -21,6 +21,8 @@ data class BotConfig(
     val githubAccessToken: String = System.getenv("GITHUB_ACCESS_TOKEN") ?: "",
     @YamlComment("Use vector search when browsing the web contents. This feature helps reduce the token usage and reduce the bill, at the cost of cutting the accuracy.")
     val useVectorSearch: Boolean = System.getenv("USE_VECTOR_SEARCH")?.toBooleanStrictOrNull() ?: false,
+    @YamlComment("Docker host URL (e.g. tcp://localhost:2376 or unix:///var/run/docker.sock). If left empty, code interpreter will be disabled.")
+    val dockerHost: String = System.getenv("DOCKER_HOST") ?: "",
 ) {
     companion object {
         lateinit var instance: BotConfig

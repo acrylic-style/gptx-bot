@@ -10,3 +10,4 @@ plugins {
 }
 
 rootProject.name = "gptx-bot"
+include("script-definition")

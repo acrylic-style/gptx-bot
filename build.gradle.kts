@@ -4,12 +4,22 @@ plugins {
     id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
-group = "xyz.acrylicstyle"
-version = "1.0.0-SNAPSHOT"
+allprojects {
+    apply {
+        plugin("org.jetbrains.kotlin.jvm")
+        plugin("org.jetbrains.kotlin.plugin.serialization")
+        plugin("com.github.johnrengelman.shadow")
+    }
 
-repositories {
-    mavenCentral()
+    group = "xyz.acrylicstyle"
+    version = "1.0.0-SNAPSHOT"
+
+    repositories {
+        mavenCentral()
+    }
 }
+
+val dockerJavaVersion = "3.3.4"
 
 dependencies {
     implementation("dev.kord:kord-core:0.12.0")
@@ -20,6 +30,8 @@ dependencies {
     implementation("it.skrape:skrapeit:1.3.0-alpha.1")
     implementation("io.github.furstenheim:copy_down:1.1")   // Convert HTML to Markdown
     implementation("com.github.jelmerk:hnswlib-core:1.1.0")
+    implementation("com.github.docker-java:docker-java-core:$dockerJavaVersion")
+    implementation("com.github.docker-java:docker-java-transport-httpclient5:$dockerJavaVersion")
 }
 
 tasks {

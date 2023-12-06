@@ -98,9 +98,9 @@ data class SetRemindFunction(val time: String, val period: String? = null, val m
         )
         saveReminds()
         if (period != null) {
-            addToolCallOutput("Successfully set remind at ${format.format(timeLong)} (every $period afterwards)")
+            addToolCallOutput("Successfully set remind at ${format.format(timeLong)} (every $period afterwards) (current: ${format.format(System.currentTimeMillis())})")
         } else {
-            addToolCallOutput("Successfully set remind at ${format.format(timeLong)}")
+            addToolCallOutput("Successfully set remind at ${format.format(timeLong)} (current: ${format.format(System.currentTimeMillis())})")
         }
     }
 
