@@ -127,14 +127,14 @@ object Util {
                             "type" to JsonPrimitive("function"),
                             "function" to JsonObject(mapOf(
                                 "name" to JsonPrimitive("set_remind"),
-                                "description" to JsonPrimitive("Set a reminder with the given time. Message is optional. DO NOT retry this function."),
+                                "description" to JsonPrimitive("Set a reminder with the given time. Message is optional. DO NOT retry this function. Current time is ${SetRemindFunction.format.format(System.currentTimeMillis())}"),
                                 "parameters" to JsonObject(mapOf(
                                     "type" to JsonPrimitive("object"),
                                     "properties" to JsonObject(mapOf(
                                         "time" to JsonObject(mapOf(
                                             "type" to JsonPrimitive("string"),
                                             "description" to JsonPrimitive(
-                                                "Time to remind at (in the format of yyyy/MM/dd HH:mm:ss, or XyXmoXdXhXmXs where X is an number, each units can be omitted). If user says 'one year', you must say '1y'. Current time is: ${SetRemindFunction.format.format(System.currentTimeMillis())}"
+                                                "Time to remind at (in the format of yyyy/MM/dd HH:mm:ss, or XyXmoXdXhXmXs where X is an number, each units can be omitted). If user says 'one year', you must say '1y'. If user says 'nine days' or '9 days', you must say '9d'. Current time is: ${SetRemindFunction.format.format(System.currentTimeMillis())}"
                                             ),
                                         )),
                                         "period" to JsonObject(mapOf(

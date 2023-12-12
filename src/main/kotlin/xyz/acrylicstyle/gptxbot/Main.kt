@@ -2,6 +2,8 @@
 package xyz.acrylicstyle.gptxbot
 
 import com.aallam.openai.api.chat.ChatMessage
+import com.aallam.openai.api.chat.FunctionCall
+import com.aallam.openai.api.chat.ToolCall
 import com.aallam.openai.api.chat.ToolId
 import dev.kord.core.Kord
 import dev.kord.core.behavior.edit
@@ -95,6 +97,19 @@ suspend fun main() {
                             }
                         }
                     }
+                    if (toolCalls.isNotEmpty()) {
+                        val chatMessage = ChatMessage.Assistant(toolCalls = toolCalls.map { toolCallData ->
+                            ToolCall.Function(
+                                ToolId(toolCallData.id),
+                                FunctionCall(
+                                    toolCallData.function?.name,
+                                    toolCallData.function?.arguments,
+                                ),
+                            )
+                        })
+                        println("Adding assistant tool call: " + json.encodeToJsonElement(chatMessage))
+                        ToolCalls.addToolCall(msg.id, chatMessage)
+                    }
                     if (ToolCalls.toolCalls[msg.id] != null && currentMessage.isBlank()) {
                         toolCalls.forEachIndexed { index, call ->
                             if (call.function?.name?.isNotBlank() == true) {
@@ -123,11 +138,6 @@ suspend fun main() {
                 response.choices[0].delta.toolCalls.forEach { call ->
                     if (call.id != null) {
                         if (toolCalls.size <= call.index) {
-                            println("Adding assistant tool call: " + json.encodeToJsonElement(response.choices[0].delta))
-                            ToolCalls.addToolCall(
-                                msg.id,
-                                json.decodeFromJsonElement<ChatMessage>(json.encodeToJsonElement(response.choices[0].delta))
-                            )
                             toolCalls.add(AssistantToolCallData(call.id))
                         } else {
                             toolCalls[call.index] = AssistantToolCallData(call.id)
