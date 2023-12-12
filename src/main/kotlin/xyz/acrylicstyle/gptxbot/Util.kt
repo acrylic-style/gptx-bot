@@ -127,7 +127,7 @@ object Util {
                             "type" to JsonPrimitive("function"),
                             "function" to JsonObject(mapOf(
                                 "name" to JsonPrimitive("set_remind"),
-                                "description" to JsonPrimitive("Set a reminder with the given time. Message is optional."),
+                                "description" to JsonPrimitive("Set a reminder with the given time. Message is optional. DO NOT retry this function."),
                                 "parameters" to JsonObject(mapOf(
                                     "type" to JsonPrimitive("object"),
                                     "properties" to JsonObject(mapOf(
@@ -145,7 +145,7 @@ object Util {
                                         )),
                                         "message" to JsonObject(mapOf(
                                             "type" to JsonPrimitive("string"),
-                                            "description" to JsonPrimitive("Message to remind with"),
+                                            "description" to JsonPrimitive("Message to remind with. If an user input for this argument is provided, DO NOT MODIFY THE MESSAGE."),
                                         )),
                                     )),
                                     "required" to JsonArray(listOf("time").map { JsonPrimitive(it) }),
