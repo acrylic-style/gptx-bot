@@ -64,9 +64,9 @@ data class BotConfig(
 
 @Serializable
 data class VertexAi(
-    val project: String = "example-project",
-    val location: String = "us-central1",
-    val publisher: String = "google",
+    val project: String = System.getenv("VERTEX_AI_PROJECT") ?: "example-project",
+    val location: String = System.getenv("VERTEX_AI_REGION") ?: "us-central1",
+    val publisher: String = System.getenv("VERTEX_AI_PUBLISHER") ?: "google",
 ) {
     fun predictStreaming(model: String, instance: JsonObject, parameters: Parameters = Parameters()) = channelFlow {
         val endpointName = EndpointName.ofProjectLocationPublisherModelName(project, location, publisher, model)!!
