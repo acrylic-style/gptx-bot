@@ -32,6 +32,8 @@ dependencies {
     implementation("com.github.jelmerk:hnswlib-core:1.1.0")
     implementation("com.github.docker-java:docker-java-core:$dockerJavaVersion")
     implementation("com.github.docker-java:docker-java-transport-httpclient5:$dockerJavaVersion")
+    implementation("com.google.cloud:google-cloud-aiplatform:3.33.0")
+    implementation("com.google.cloud:google-cloud-vertexai:0.1.0")
 }
 
 tasks {

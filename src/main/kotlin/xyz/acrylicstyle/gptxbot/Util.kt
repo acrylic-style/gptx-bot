@@ -1,26 +1,36 @@
 package xyz.acrylicstyle.gptxbot
 
-import com.aallam.openai.api.chat.ChatCompletionRequest
-import com.aallam.openai.api.chat.ChatMessage
-import com.aallam.openai.api.chat.ImagePart
-import com.aallam.openai.api.chat.ListContent
+import com.aallam.openai.api.chat.*
 import com.aallam.openai.api.core.Role
 import com.aallam.openai.api.model.ModelId
 import com.aallam.openai.client.OpenAI
+import com.google.cloud.aiplatform.v1.Tensor
+import com.google.cloud.vertexai.api.Blob
+import com.google.cloud.vertexai.api.Content
+import com.google.cloud.vertexai.api.Part
+import com.google.protobuf.ByteString
+import com.google.protobuf.util.JsonFormat
 import com.spotify.github.v3.clients.GitHubClient
 import dev.kord.common.entity.Snowflake
+import dev.kord.core.behavior.edit
 import dev.kord.core.entity.Message
 import dev.kord.core.entity.channel.TopGuildMessageChannel
 import dev.kord.core.entity.channel.thread.ThreadChannel
+import dev.kord.rest.builder.message.embed
+import io.ktor.client.request.forms.*
+import io.ktor.utils.io.jvm.javaio.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
+import xyz.acrylicstyle.gptxbot.function.Function
 import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
+import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import java.util.concurrent.atomic.AtomicReference
 
 object Util {
     private const val YEAR = 1000L * 60L * 60L * 24L * 365L
@@ -29,6 +39,21 @@ object Util {
     private const val HOUR = 1000L * 60L * 60L
     private const val MINUTE = 1000L * 60L
     private const val SECOND = 1000L
+
+    val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+
+    fun trimContent(message: Message): String {
+        var trimmed = message.content.replace("<@!?${message.kord.selfId}>".toRegex(), "").trim()
+        if (trimmed.isBlank()) return ""
+        val firstMatch = "\\|\\|[a-z0-9_\\-]+\\|\\|".toRegex().find(trimmed)
+        if (firstMatch != null) {
+            trimmed = trimmed.replaceFirst(firstMatch.value, "").trim()
+        }
+        return trimmed
+    }
 
     suspend fun getUserId(id: Snowflake) = BotConfig.instance.getCloudflareKVDiscord().get(id.toString())
 
@@ -286,8 +311,155 @@ object Util {
         }
         return time
     }
+
+    suspend fun generateGoogle(currentMessage: AtomicReference<String>, replyMessage: Message, originalMessage: Message) {
+        var lastUpdate = System.currentTimeMillis()
+        val contents = originalMessage.toGoogleContentList()
+        val model = if (contents.hasImage()) "gemini-pro-vision" else "gemini-pro"
+        val parameters = VertexAi.Parameters()
+        BotConfig.instance.vertexAi.predict(model, contents, parameters).collect { response ->
+            if (response == null) {
+                if (currentMessage.get().isNotBlank()) {
+                    replyMessage.edit {
+                        if (currentMessage.get().length > 2000) {
+                            content = ""
+                            embed {
+                                description = currentMessage.get().capAtLength(4000)
+                            }
+                        } else {
+                            content = currentMessage.get()
+                        }
+                        if (currentMessage.get().length > 500) {
+                            ByteArrayInputStream(currentMessage.get().toByteArray()).use { stream ->
+                                addFile("output.md", ChannelProvider { stream.toByteReadChannel() })
+                            }
+                        }
+                    }
+                }
+                return@collect
+            }
+            val candidate = response.candidatesList.getOrNull(0)
+            if (candidate != null && candidate.hasContent()) {
+                println(JsonFormat.printer().print(response))
+                val delta = candidate.content.partsList.getOrNull(0)?.text
+                if (delta != null) {
+                    currentMessage.set(currentMessage.get() + delta)
+                }
+            }
+            if (currentMessage.get().isBlank()) return@collect
+            if (System.currentTimeMillis() - lastUpdate < 1000) return@collect
+            lastUpdate = System.currentTimeMillis()
+            if (currentMessage.get().length in 1..2000) {
+                replyMessage.edit { content = currentMessage.get() }
+            } else if (currentMessage.get().length > 2000) {
+                replyMessage.edit {
+                    content = ""
+                    embed {
+                        description = currentMessage.get().capAtLength(4000)
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun generateOpenAI(currentMessage: AtomicReference<String>, replyMessage: Message, originalMessage: Message) {
+        var lastUpdate = System.currentTimeMillis()
+        val initialToolCallIndex = ToolCalls.toolCalls[replyMessage.id]?.size ?: 0
+        val toolCalls = mutableListOf<AssistantToolCallData>()
+        createChatCompletions(originalMessage).collect { data ->
+            if (data.data == "[DONE]") {
+                if (currentMessage.get().isNotBlank()) {
+                    replyMessage.edit {
+                        if (currentMessage.get().length > 2000) {
+                            content = ""
+                            embed {
+                                description = currentMessage.get().capAtLength(4000)
+                            }
+                        } else {
+                            content = currentMessage.get()
+                        }
+                        if (currentMessage.get().length > 500) {
+                            ByteArrayInputStream(currentMessage.get().toByteArray()).use { stream ->
+                                addFile("output.md", ChannelProvider { stream.toByteReadChannel() })
+                            }
+                        }
+                    }
+                }
+                if (toolCalls.isNotEmpty()) {
+                    val chatMessage = ChatMessage.Assistant(toolCalls = toolCalls.map { toolCallData ->
+                        ToolCall.Function(
+                            ToolId(toolCallData.id),
+                            FunctionCall(
+                                toolCallData.function?.name,
+                                toolCallData.function?.arguments,
+                            ),
+                        )
+                    })
+                    println("Adding assistant tool call: " + json.encodeToJsonElement(chatMessage))
+                    ToolCalls.addToolCall(replyMessage.id, chatMessage)
+                }
+                if (ToolCalls.toolCalls[replyMessage.id] != null && currentMessage.get().isBlank()) {
+                    toolCalls.forEachIndexed { index, call ->
+                        if (call.function?.name?.isNotBlank() == true) {
+                            val obj = if (call.function!!.arguments.isNotBlank() && call.function!!.arguments != "{}") {
+                                val arguments = json.parseToJsonElement(call.function!!.arguments)
+                                JsonObject(arguments.jsonObject + mapOf("type" to JsonPrimitive(call.function!!.name)))
+                            } else {
+                                JsonObject(mapOf("type" to JsonPrimitive(call.function!!.name)))
+                            }
+                            val function = json.decodeFromJsonElement<Function>(obj)
+                            var added = false
+                            function.call(originalMessage) {
+                                if (added) error("Already added")
+                                added = true
+                                ToolCalls.addToolCall(initialToolCallIndex + (index * 2) + 1, replyMessage.id, ChatMessage.Tool(it, ToolId(call.id)))
+                            }
+                        }
+                    }
+                    println(ToolCalls.toolCalls[replyMessage.id])
+                    ToolCalls.save()
+                    generateOpenAI(currentMessage, replyMessage, originalMessage)
+                }
+                return@collect
+            }
+            val response = json.decodeFromString<StreamResponse>(data.data)
+            response.choices[0].delta.toolCalls.forEach { call ->
+                if (call.id != null) {
+                    if (toolCalls.size <= call.index) {
+                        toolCalls.add(AssistantToolCallData(call.id))
+                    } else {
+                        toolCalls[call.index] = AssistantToolCallData(call.id)
+                    }
+                }
+                if (call.function.name != null) {
+                    toolCalls[call.index].getAndSetFunction().name = call.function.name
+                }
+                if (call.function.arguments != null) {
+                    toolCalls[call.index].getAndSetFunction().arguments += call.function.arguments
+                }
+            }
+            val delta = response.choices[0].delta.content
+            if (delta != null) {
+                currentMessage.set(currentMessage.get() + delta)
+            }
+            if (currentMessage.get().isBlank()) return@collect
+            if (System.currentTimeMillis() - lastUpdate < 1000) return@collect
+            lastUpdate = System.currentTimeMillis()
+            if (currentMessage.get().length in 1..2000) {
+                replyMessage.edit { content = currentMessage.get() }
+            } else if (currentMessage.get().length > 2000) {
+                replyMessage.edit {
+                    content = ""
+                    embed {
+                        description = currentMessage.get().capAtLength(4000)
+                    }
+                }
+            }
+        }
+    }
 }
 
+@JvmName("List_ChatMessage_hasImage")
 fun List<ChatMessage>.hasImage() =
     any { it.role == Role.User && it.messageContent is ListContent && (it.messageContent as ListContent).content.any { p -> p is ImagePart } }
 
@@ -307,10 +479,8 @@ suspend fun Message.toChatMessageList(root: Boolean = true): List<ChatMessage> {
         } else {
             author!!.id
         }
-        Util.getUserData(id)?.let {
-            it.jsonObject["default_instruction"]?.jsonPrimitive?.contentOrNull?.let { instruction ->
-                messages += ChatMessage.System(instruction)
-            }
+        Util.getUserData(id)?.jsonObject?.get("default_instruction")?.jsonPrimitive?.contentOrNull?.let { instruction ->
+            messages += ChatMessage.System(instruction)
         }
         if (thread != null && thread.ownerId == kord.selfId) {
             starterMessage?.let { messages += it.toChatMessageList(false) }
@@ -328,7 +498,7 @@ suspend fun Message.toChatMessageList(root: Boolean = true): List<ChatMessage> {
                 messages += ChatMessage.Assistant(content)
             }
         } else {
-            val trimmedContent = content.replace("<@!?${kord.selfId}>".toRegex(), "").trim()
+            val trimmedContent = Util.trimContent(this)
             if (trimmedContent.isNotBlank()) {
                 messages += ChatMessage.User(trimmedContent)
             }
@@ -346,6 +516,76 @@ suspend fun Message.toChatMessageList(root: Boolean = true): List<ChatMessage> {
                     messages += ChatMessage.User(it)
                 }
             }
+        }
+    }
+    return messages
+}
+
+@JvmName("List_Content_hasImage")
+fun List<Content>.hasImage() =
+    any { it.partsList.any { p -> p.hasInlineData() } }
+
+suspend fun Message.toGoogleContentList(root: Boolean = true): List<Content> {
+    fun createTextPart(text: String) = Part.newBuilder().setText(text).build()
+    fun createImagePart(url: String, filename: String): Part {
+        val mimeType = when {
+            filename.endsWith(".png") -> "image/png"
+            filename.endsWith(".jpg") || filename.endsWith(".jpeg") -> "image/jpeg"
+            filename.endsWith(".webp") -> "image/webp"
+            filename.endsWith(".gif") -> "image/gif"
+            else -> "image/png"
+        }
+        return Part.newBuilder().setInlineData(Blob.newBuilder().setData(ByteString.readFrom(URL(url).openStream())).setMimeType(mimeType)).build()
+    }
+    fun createContent(role: String, parts: List<Part>) = Content.newBuilder().addAllParts(parts).setRole(role).build()
+
+    val thread = getChannelOrNull() as? ThreadChannel
+    val starterMessage = (thread?.getParentOrNull() as? TopGuildMessageChannel)?.getMessage(thread.id)
+    val messages = mutableListOf<Content>()
+    if (root && author != null) {
+        val id = if (author!!.id == kord.selfId) {
+            if (referencedMessage?.author?.isBot == false) {
+                referencedMessage!!.author!!.id
+            } else if (thread != null && thread.ownerId == kord.selfId && starterMessage != null && starterMessage.author != null) {
+                starterMessage.author!!.id
+            } else {
+                author!!.id
+            }
+        } else {
+            author!!.id
+        }
+        Util.getUserData(id)?.jsonObject?.get("default_instruction")?.jsonPrimitive?.contentOrNull?.let { instruction ->
+            // TODO: system role is not allowed?
+            //messages += createContent("system", listOf(createTextPart(instruction)))
+        }
+        if (thread != null && thread.ownerId == kord.selfId) {
+            starterMessage?.let { messages += it.toGoogleContentList(false) }
+            thread.getMessagesBefore(Snowflake.max, 50)
+                .collect { messages += it.toGoogleContentList(false) }
+        }
+    }
+    if (thread == null) {
+        referencedMessage?.toGoogleContentList(false)?.let { messages += it }
+    }
+    //ToolCalls.toolCalls[id]?.let { messages += it }
+    if (ToolCalls.toolCalls[id] == null) {
+        if (author?.id == kord.selfId) {
+            if (content.isNotBlank()) {
+                messages += createContent("model", listOf(createTextPart(content)))
+            }
+        } else {
+            val parts = mutableListOf<Part>()
+            val trimmedContent = Util.trimContent(this)
+            if (trimmedContent.isNotBlank()) {
+                parts += createTextPart(trimmedContent)
+            }
+            attachments.forEach { attachment ->
+                val filename = attachment.filename.lowercase()
+                if (filename.endsWith(".png") || filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
+                    parts += createImagePart(attachment.url, filename)
+                }
+            }
+            messages += createContent("user", parts)
         }
     }
     return messages
@@ -382,4 +622,21 @@ val githubClient: GitHubClient? by lazy {
 
     //  create github client
     GitHubClient.create(URI.create("https://api.github.com/"), BotConfig.instance.githubAccessToken)
+}
+
+fun JsonElement.toTensor(): Tensor = when (this) {
+    is JsonPrimitive -> {
+        this.doubleOrNull?.let { Tensor.newBuilder().addDoubleVal(it).build() } ?:
+        this.intOrNull?.let { Tensor.newBuilder().addIntVal(it).build() } ?:
+        this.longOrNull?.let { Tensor.newBuilder().addInt64Val(it).build() } ?:
+        this.booleanOrNull?.let { Tensor.newBuilder().addBoolVal(it).build() } ?:
+        Tensor.newBuilder().addStringVal(this.content).build()
+    }
+    is JsonObject -> {
+        val tensor = Tensor.newBuilder()
+        forEach { key, value -> tensor.putStructVal(key, value.toTensor()) }
+        tensor.build()
+    }
+    is JsonArray -> Tensor.newBuilder().addAllListVal(map { it.toTensor() }).build()
+    else -> throw IllegalArgumentException("Unsupported type: ${this::class.simpleName}")
 }

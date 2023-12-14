@@ -27,6 +27,7 @@ import xyz.acrylicstyle.gptxbot.function.Function
 import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 
 private val logger = LoggerFactory.getLogger("GPTxBot")
 
@@ -35,10 +36,6 @@ suspend fun main() {
     BotConfig.loadConfig(File("."))
 
     val client = Kord(BotConfig.instance.token)
-    val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
 
     client.on<ReadyEvent> {
         SetRemindFunction.load(client)
@@ -59,9 +56,20 @@ suspend fun main() {
 //            }
 //            return@on
 //        }
+        var trimmed = message.content.replace("<@!?${kord.selfId}>".toRegex(), "").trim()
+        if (trimmed.isBlank()) return@on
+        // extract pattern like ||google|| from the message
+        val firstMatch = "\\|\\|[a-z0-9_\\-]+\\|\\|".toRegex().find(trimmed)
+        val type = if (firstMatch != null) {
+            val model = firstMatch.value.substring(2, firstMatch.value.length - 2)
+            trimmed = trimmed.replaceFirst(firstMatch.value, "").trim()
+            model
+        } else {
+            null
+        }
         val msg = if (BotConfig.instance.createThread && message.getChannel() !is ThreadChannel && message.getChannel() is TextChannel) {
             (message.getChannel() as TextChannel)
-                .startPublicThreadWithMessage(message.id, message.content.replace("<@!?${kord.selfId}>".toRegex(), "").trim().take(50))
+                .startPublicThreadWithMessage(message.id, trimmed.take(50))
                 .createMessage("Thinking...")
         } else if (message.getChannel() is ThreadChannel) {
             val thread = message.getChannel() as ThreadChannel
@@ -73,103 +81,12 @@ suspend fun main() {
         } else {
             message.reply { content = "Thinking..." }
         }
-        var currentMessage = ""
-        var lastUpdate = System.currentTimeMillis()
-        suspend fun generate(message: Message) {
-            val initialToolCallIndex = ToolCalls.toolCalls[msg.id]?.size ?: 0
-            val toolCalls = mutableListOf<AssistantToolCallData>()
-            Util.createChatCompletions(message).collect { data ->
-                if (data.data == "[DONE]") {
-                    if (currentMessage.isNotBlank()) {
-                        msg.edit {
-                            if (currentMessage.length > 2000) {
-                                content = ""
-                                embed {
-                                    description = currentMessage.capAtLength(4000)
-                                }
-                            } else {
-                                content = currentMessage
-                            }
-                            if (currentMessage.length > 500) {
-                                ByteArrayInputStream(currentMessage.toByteArray()).use { stream ->
-                                    addFile("output.md", ChannelProvider { stream.toByteReadChannel() })
-                                }
-                            }
-                        }
-                    }
-                    if (toolCalls.isNotEmpty()) {
-                        val chatMessage = ChatMessage.Assistant(toolCalls = toolCalls.map { toolCallData ->
-                            ToolCall.Function(
-                                ToolId(toolCallData.id),
-                                FunctionCall(
-                                    toolCallData.function?.name,
-                                    toolCallData.function?.arguments,
-                                ),
-                            )
-                        })
-                        println("Adding assistant tool call: " + json.encodeToJsonElement(chatMessage))
-                        ToolCalls.addToolCall(msg.id, chatMessage)
-                    }
-                    if (ToolCalls.toolCalls[msg.id] != null && currentMessage.isBlank()) {
-                        toolCalls.forEachIndexed { index, call ->
-                            if (call.function?.name?.isNotBlank() == true) {
-                                val obj = if (call.function!!.arguments.isNotBlank() && call.function!!.arguments != "{}") {
-                                    val arguments = json.parseToJsonElement(call.function!!.arguments)
-                                    JsonObject(arguments.jsonObject + mapOf("type" to JsonPrimitive(call.function!!.name)))
-                                } else {
-                                    JsonObject(mapOf("type" to JsonPrimitive(call.function!!.name)))
-                                }
-                                val function = json.decodeFromJsonElement<Function>(obj)
-                                var added = false
-                                function.call(message) {
-                                    if (added) error("Already added")
-                                    added = true
-                                    ToolCalls.addToolCall(initialToolCallIndex + (index * 2) + 1, msg.id, ChatMessage.Tool(it, ToolId(call.id)))
-                                }
-                            }
-                        }
-                        println(ToolCalls.toolCalls[msg.id])
-                        ToolCalls.save()
-                        generate(msg)
-                    }
-                    return@collect
-                }
-                val response = json.decodeFromString<StreamResponse>(data.data)
-                response.choices[0].delta.toolCalls.forEach { call ->
-                    if (call.id != null) {
-                        if (toolCalls.size <= call.index) {
-                            toolCalls.add(AssistantToolCallData(call.id))
-                        } else {
-                            toolCalls[call.index] = AssistantToolCallData(call.id)
-                        }
-                    }
-                    if (call.function.name != null) {
-                        toolCalls[call.index].getAndSetFunction().name = call.function.name
-                    }
-                    if (call.function.arguments != null) {
-                        toolCalls[call.index].getAndSetFunction().arguments += call.function.arguments
-                    }
-                }
-                val delta = response.choices[0].delta.content
-                if (delta != null) {
-                    currentMessage += delta
-                }
-                if (currentMessage.isBlank()) return@collect
-                if (System.currentTimeMillis() - lastUpdate < 1000) return@collect
-                lastUpdate = System.currentTimeMillis()
-                if (currentMessage.length in 1..2000) {
-                    msg.edit { content = currentMessage }
-                } else if (currentMessage.length > 2000) {
-                    msg.edit {
-                        content = ""
-                        embed {
-                            description = currentMessage.capAtLength(4000)
-                        }
-                    }
-                }
-            }
+        val currentMessage = AtomicReference("")
+        if (type == "google") {
+            Util.generateGoogle(currentMessage, msg, message)
+        } else {
+            Util.generateOpenAI(currentMessage, msg, message)
         }
-        generate(message)
     }
 
     client.login {

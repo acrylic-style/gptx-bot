@@ -45,3 +45,4 @@ bin/
 config.yml
 tool_calls.json
 reminds.json
+service-account-credentials.json
