@@ -539,7 +539,7 @@ suspend fun Message.toGoogleContentList(root: Boolean = true): List<Content> {
     }
     fun createContent(role: String, parts: List<Part>) = Content.newBuilder().addAllParts(parts).setRole(role).build()
 
-    val thread = getChannelOrNull() as? ThreadChannel
+    val thread: ThreadChannel? = null//getChannelOrNull() as? ThreadChannel
     val starterMessage = (thread?.getParentOrNull() as? TopGuildMessageChannel)?.getMessage(thread.id)
     val messages = mutableListOf<Content>()
     if (root && author != null) {
