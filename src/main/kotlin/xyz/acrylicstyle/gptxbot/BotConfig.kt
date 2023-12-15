@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.encodeToJsonElement
@@ -29,6 +28,7 @@ private val logger = LoggerFactory.getLogger(BotConfig::class.java)!!
 data class BotConfig(
     val token: String = System.getenv("TOKEN") ?: "BOT_TOKEN_HERE",
     val openAIToken: String = System.getenv("OPENAI_TOKEN") ?: "sk-xxx",
+    val openAIOrganization: String? = System.getenv("OPENAI_ORGANIZATION") ?: null,
     val assistantId: String = System.getenv("ASSISTANT_ID") ?: "asst_xxx",
     val cloudflareApiKey: String = System.getenv("CLOUDFLARE_API_KEY") ?: "",
     val cloudflareAccountId: String = System.getenv("CLOUDFLARE_ACCOUNT_ID") ?: "",
@@ -60,6 +60,12 @@ data class BotConfig(
 
     fun getCloudflareKVUsers() = CloudflareKV(cloudflareAccountId, cloudflareKvUsersId)
     fun getCloudflareKVDiscord() = CloudflareKV(cloudflareAccountId, cloudflareKvDiscordId)
+
+    fun getExtraOpenAIHeaders(): Map<String, String> {
+        val map = mutableMapOf<String, String>()
+        if (openAIOrganization != null) map["OpenAI-Organization"] = openAIOrganization
+        return map
+    }
 }
 
 @Serializable

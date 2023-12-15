@@ -20,6 +20,7 @@ class VectorOpenAI(private val database: VectorDatabase) {
         client.post("https://api.openai.com/v1/embeddings") {
             header("Authorization", "Bearer ${BotConfig.instance.openAIToken}")
             header("Content-Type", "application/json")
+            BotConfig.instance.getExtraOpenAIHeaders().forEach { (k, v) -> header(k, v) }
             setBody(Json.encodeToString<Map<String, String>>(mapOf(
                 "model" to "text-embedding-ada-002",
                 "input" to text,
@@ -42,6 +43,7 @@ class VectorOpenAI(private val database: VectorDatabase) {
         client.post("https://api.openai.com/v1/embeddings") {
             header("Authorization", "Bearer ${BotConfig.instance.openAIToken}")
             header("Content-Type", "application/json")
+            BotConfig.instance.getExtraOpenAIHeaders().forEach { (k, v) -> header(k, v) }
             setBody(Json.encodeToString(mapOf(
                 "model" to "text-embedding-ada-002",
                 "input" to texts,

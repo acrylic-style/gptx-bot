@@ -2,8 +2,6 @@ package xyz.acrylicstyle.gptxbot
 
 import com.aallam.openai.api.chat.*
 import com.aallam.openai.api.core.Role
-import com.aallam.openai.api.model.ModelId
-import com.aallam.openai.client.OpenAI
 import com.google.cloud.aiplatform.v1.Tensor
 import com.google.cloud.vertexai.api.Blob
 import com.google.cloud.vertexai.api.Content
@@ -272,7 +270,7 @@ object Util {
             mapOf(
                 "Authorization" to "Bearer ${BotConfig.instance.openAIToken}",
                 "Content-Type" to "application/json",
-            )
+            ) + BotConfig.instance.getExtraOpenAIHeaders(),
         )
     }
 
@@ -590,14 +588,6 @@ suspend fun Message.toGoogleContentList(root: Boolean = true): List<Content> {
     }
     return messages
 }
-
-suspend fun OpenAI.createCompletion(message: Message) =
-    chatCompletions(ChatCompletionRequest(
-        ModelId("gpt-4-vision-preview"),
-        message.toChatMessageList(),
-        maxTokens = 4096,
-        user = message.author?.id?.toString(),
-    )).map { chunk -> chunk.choices.getOrNull(0)?.delta?.content }
 
 fun String.capAtLength(maxStringLength: Int = 1900, linePrefix: String = ""): String {
     var chars = 0
