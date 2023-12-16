@@ -9,7 +9,7 @@ import kotlinx.serialization.Serializable
 data object ListRemindFunction : Function {
     override suspend fun call(originalMessage: Message, addToolCallOutput: (String) -> Unit) {
         val list = mutableListOf<String>()
-        SetRemindFunction.reminds.forEach {
+        SetRemindFunction.reminds.filter { it.userId == originalMessage.author?.id }.forEach {
             val index = SetRemindFunction.reminds.filter { r -> r.userId == it.userId }.indexOf(it)
             val date = SetRemindFunction.format.format(it.at)
             val every = if (it.every != null) " (every ${it.every / 1000} seconds)" else ""
