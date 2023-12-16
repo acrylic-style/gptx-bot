@@ -422,7 +422,7 @@ object Util {
                             function.call(originalMessage) {
                                 if (added) error("Already added")
                                 added = true
-                                ToolCalls.addToolCall(initialToolCallIndex + (index * 2) + 1, replyMessage.id, ChatMessage.Tool(it, ToolId(call.id)))
+                                ToolCalls.addToolCall(initialToolCallIndex + (index * 2) + 1, replyMessage.id, ChatMessage.Tool("Function ${call.function!!.name} called successfully. Output:\n$it", ToolId(call.id)))
                             }
                         }
                     }
