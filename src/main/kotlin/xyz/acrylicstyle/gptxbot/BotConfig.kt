@@ -2,25 +2,17 @@ package xyz.acrylicstyle.gptxbot
 
 import com.charleskorn.kaml.Yaml
 import com.charleskorn.kaml.YamlComment
-import com.google.api.gax.rpc.ResponseObserver
-import com.google.api.gax.rpc.StreamController
 import com.google.auth.oauth2.GoogleCredentials
-import com.google.cloud.aiplatform.v1.*
 import com.google.cloud.vertexai.Transport
 import com.google.cloud.vertexai.VertexAI
 import com.google.cloud.vertexai.api.Content
+import com.google.cloud.vertexai.api.GenerateContentResponse
 import com.google.cloud.vertexai.generativeai.preview.GenerativeModel
 import com.google.protobuf.util.JsonFormat
-import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.encodeToJsonElement
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.util.concurrent.CountDownLatch
 
 private val logger = LoggerFactory.getLogger(BotConfig::class.java)!!
 
@@ -74,43 +66,7 @@ data class VertexAi(
     val location: String = System.getenv("VERTEX_AI_REGION") ?: "us-central1",
     val publisher: String = System.getenv("VERTEX_AI_PUBLISHER") ?: "google",
 ) {
-    fun predictStreaming(model: String, instance: JsonObject, parameters: Parameters = Parameters()) = channelFlow {
-        val endpointName = EndpointName.ofProjectLocationPublisherModelName(project, location, publisher, model)!!
-        val endpoint = "$location-aiplatform.googleapis.com:443"
-        val settings = PredictionServiceSettings.newBuilder().setEndpoint(endpoint).build()
-
-        PredictionServiceClient.create(settings).use { client ->
-            val instanceTensor = instance.toTensor()
-            val parametersTensor = Json.encodeToJsonElement(parameters).toTensor()
-            val latch = CountDownLatch(1)
-            val stream = client.streamingPredictCallable().splitCall(object : ResponseObserver<StreamingPredictResponse> {
-                override fun onStart(controller: StreamController?) {
-                    // no-op
-                }
-
-                override fun onError(throwable: Throwable?) {
-                    logger.error("Error while predicting", throwable)
-                    runBlocking { this@channelFlow.close(throwable) }
-                    latch.countDown()
-                }
-
-                override fun onComplete() {
-                    runBlocking { send(null) }
-                    latch.countDown()
-                }
-
-                override fun onResponse(value: StreamingPredictResponse?) {
-                    runBlocking {
-                        send(value)
-                    }
-                }
-            })
-            stream.send(StreamingPredictRequest.newBuilder().setEndpoint(endpointName.toString()).setParameters(parametersTensor).addInputs(instanceTensor).build())
-            latch.await()
-        }
-    }
-
-    suspend fun predict(model: String, contents: List<Content>, parameters: Parameters = Parameters()) = flow {
+    suspend fun predictStreaming(model: String, contents: List<Content>, parameters: Parameters = Parameters()) = flow {
         VertexAI(project, location, Transport.REST, GoogleCredentials.getApplicationDefault()).use { client ->
             val generativeModel = GenerativeModel(model, client)
             val stream = generativeModel.generateContentStream(contents)
@@ -118,6 +74,13 @@ data class VertexAi(
                 emit(response)
             }
             emit(null)
+        }
+    }
+
+    fun predict(model: String, contents: List<Content>, parameters: Parameters = Parameters()): GenerateContentResponse {
+        VertexAI(project, location, Transport.REST, GoogleCredentials.getApplicationDefault()).use { client ->
+            val generativeModel = GenerativeModel(model, client)
+            return generativeModel.generateContent(contents)
         }
     }
 

@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import xyz.acrylicstyle.gptxbot.function.Function
-import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
 import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URI
@@ -322,12 +321,33 @@ object Util {
         return time
     }
 
-    suspend fun generateGoogle(currentMessage: AtomicReference<String>, replyMessage: Message, originalMessage: Message) {
+    suspend fun generateGoogle(stream: Boolean, currentMessage: AtomicReference<String>, replyMessage: Message, originalMessage: Message) {
         var lastUpdate = System.currentTimeMillis()
         val contents = originalMessage.toGoogleContentList()
         val model = if (contents.hasImage()) "gemini-pro-vision" else "gemini-pro"
         val parameters = VertexAi.Parameters()
-        BotConfig.instance.vertexAi.predict(model, contents, parameters).collect { response ->
+        if (!stream) {
+            val response = BotConfig.instance.vertexAi.predict(model, contents, parameters)
+            println(JsonFormat.printer().print(response))
+            replyMessage.edit {
+                val text = response.candidatesList[0].content.partsList[0].text
+                if (text.length > 2000) {
+                    content = ""
+                    embed {
+                        description = text.capAtLength(4000)
+                    }
+                } else {
+                    content = text
+                }
+                if (text.length > 500) {
+                    ByteArrayInputStream(text.toByteArray()).use { stream ->
+                        addFile("output.md", ChannelProvider { stream.toByteReadChannel() })
+                    }
+                }
+            }
+            return
+        }
+        BotConfig.instance.vertexAi.predictStreaming(model, contents, parameters).collect { response ->
             if (response == null) {
                 if (currentMessage.get().isNotBlank()) {
                     replyMessage.edit {

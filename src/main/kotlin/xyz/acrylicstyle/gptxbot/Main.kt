@@ -1,14 +1,8 @@
 @file:JvmName("MainKt")
 package xyz.acrylicstyle.gptxbot
 
-import com.aallam.openai.api.chat.ChatMessage
-import com.aallam.openai.api.chat.FunctionCall
-import com.aallam.openai.api.chat.ToolCall
-import com.aallam.openai.api.chat.ToolId
 import dev.kord.core.Kord
-import dev.kord.core.behavior.edit
 import dev.kord.core.behavior.reply
-import dev.kord.core.entity.Message
 import dev.kord.core.entity.channel.TextChannel
 import dev.kord.core.entity.channel.thread.ThreadChannel
 import dev.kord.core.event.gateway.ReadyEvent
@@ -18,14 +12,8 @@ import dev.kord.gateway.Intent
 import dev.kord.gateway.Intents
 import dev.kord.gateway.NON_PRIVILEGED
 import dev.kord.gateway.PrivilegedIntent
-import dev.kord.rest.builder.message.embed
-import io.ktor.client.request.forms.*
-import io.ktor.utils.io.jvm.javaio.*
-import kotlinx.serialization.json.*
 import org.slf4j.LoggerFactory
-import xyz.acrylicstyle.gptxbot.function.Function
 import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
-import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 
@@ -82,10 +70,10 @@ suspend fun main() {
             message.reply { content = "Thinking..." }
         }
         val currentMessage = AtomicReference("")
-        if (type == "google") {
-            Util.generateGoogle(currentMessage, msg, message)
-        } else {
-            Util.generateOpenAI(currentMessage, msg, message)
+        when (type) {
+            "google-stream" -> Util.generateGoogle(true, currentMessage, msg, message)
+            "google" -> Util.generateGoogle(false, currentMessage, msg, message)
+            else -> Util.generateOpenAI(currentMessage, msg, message)
         }
     }
 
