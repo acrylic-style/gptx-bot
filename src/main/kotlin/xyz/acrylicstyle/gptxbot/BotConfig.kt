@@ -2,13 +2,12 @@ package xyz.acrylicstyle.gptxbot
 
 import com.charleskorn.kaml.Yaml
 import com.charleskorn.kaml.YamlComment
+import com.google.api.gax.core.FixedCredentialsProvider
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.cloud.vertexai.Transport
 import com.google.cloud.vertexai.VertexAI
-import com.google.cloud.vertexai.api.Content
-import com.google.cloud.vertexai.api.GenerateContentResponse
+import com.google.cloud.vertexai.api.*
 import com.google.cloud.vertexai.generativeai.preview.GenerativeModel
-import com.google.protobuf.util.JsonFormat
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
@@ -66,11 +65,19 @@ data class VertexAi(
     val location: String = System.getenv("VERTEX_AI_REGION") ?: "us-central1",
     val publisher: String = System.getenv("VERTEX_AI_PUBLISHER") ?: "google",
 ) {
-    suspend fun predictStreaming(model: String, contents: List<Content>, parameters: Parameters = Parameters()) = flow {
-        VertexAI(project, location, Transport.REST, GoogleCredentials.getApplicationDefault()).use { client ->
-            val generativeModel = GenerativeModel(model, client)
-            val stream = generativeModel.generateContentStream(contents)
-            stream.forEach { response ->
+    private fun getResourceName(model: String) = "projects/$project/locations/$location/publishers/$publisher/models/$model"
+
+    suspend fun predictStreaming(model: String, contents: List<Content>, parameters: Parameters = Parameters(), tools: Iterable<Tool> = emptyList()) = flow {
+        val builder = GenerateContentRequest.newBuilder().addAllContents(contents)
+        builder.addAllTools(tools)
+        builder.setGenerationConfig(GenerationConfig.newBuilder().setTemperature(parameters.temperature).setMaxOutputTokens(parameters.maxOutputTokens))
+        val request = builder.setEndpoint(getResourceName(model)).setModel(getResourceName(model)).build()
+        val settings =
+            PredictionServiceSettings.newHttpJsonBuilder().setEndpoint("$location-aiplatform.googleapis.com:443")
+                .setCredentialsProvider(FixedCredentialsProvider.create(GoogleCredentials.getApplicationDefault()))
+                .build()
+        PredictionServiceClient.create(settings).use { client ->
+            client.streamGenerateContentCallable().call(request).iterator().forEach { response ->
                 emit(response)
             }
             emit(null)
@@ -84,15 +91,9 @@ data class VertexAi(
         }
     }
 
-    private fun stringToValue(str: String): com.google.protobuf.Value {
-        val value = com.google.protobuf.Value.newBuilder()
-        JsonFormat.parser().merge(str, value)
-        return value.build()
-    }
-
     @Serializable
     data class Parameters(
-        val temperature: Double = 0.5,
+        val temperature: Float = 0.5F,
         val maxOutputTokens: Int = 2048,
     )
 }

@@ -53,7 +53,7 @@ suspend fun main() {
             trimmed = trimmed.replaceFirst(firstMatch.value, "").trim()
             model
         } else {
-            null
+            ModelStore.map[message.referencedMessage?.id]
         }
         val msg = if (BotConfig.instance.createThread && message.getChannel() !is ThreadChannel && message.getChannel() is TextChannel) {
             (message.getChannel() as TextChannel)
@@ -69,10 +69,14 @@ suspend fun main() {
         } else {
             message.reply { content = "Thinking..." }
         }
+        if (type != null) {
+            ModelStore.map[message.id] = type
+            ModelStore.save()
+        }
         val currentMessage = AtomicReference("")
         when (type) {
-            "google-stream" -> Util.generateGoogle(true, currentMessage, msg, message)
-            "google" -> Util.generateGoogle(false, currentMessage, msg, message)
+            "google" -> Util.generateGoogle(true, currentMessage, msg, message)
+            "google-nostream" -> Util.generateGoogle(false, currentMessage, msg, message)
             else -> Util.generateOpenAI(currentMessage, msg, message)
         }
     }

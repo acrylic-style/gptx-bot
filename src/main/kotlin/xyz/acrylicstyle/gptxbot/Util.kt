@@ -1,11 +1,12 @@
 package xyz.acrylicstyle.gptxbot
 
 import com.aallam.openai.api.chat.*
+import com.aallam.openai.api.chat.FunctionCall
 import com.aallam.openai.api.core.Role
 import com.google.cloud.aiplatform.v1.Tensor
-import com.google.cloud.vertexai.api.Blob
+import com.google.cloud.vertexai.api.*
 import com.google.cloud.vertexai.api.Content
-import com.google.cloud.vertexai.api.Part
+import com.google.cloud.vertexai.api.Tool
 import com.google.protobuf.ByteString
 import com.google.protobuf.util.JsonFormat
 import com.spotify.github.v3.clients.GitHubClient
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import xyz.acrylicstyle.gptxbot.function.Function
+import xyz.acrylicstyle.gptxbot.struct.GoogleContent
 import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
 import java.net.URI
@@ -99,11 +101,11 @@ object Util {
             }
         }.flowOn(Dispatchers.IO)
 
-    suspend fun createChatCompletions(message: Message): Flow<EventData> {
-        val messageList = message.toChatMessageList()
+    suspend fun createChatCompletions(message: Message, messageToFetchList: Message): Flow<EventData> {
+        val messageList = messageToFetchList.toChatMessageList()
         val hasImage = messageList.hasImage()
         val messages = messageList.let { Json.encodeToJsonElement(it) }
-        println(messages)
+        println("contents: $messages")
         val body = JsonObject(
             if (hasImage) {
                 mapOf(
@@ -321,11 +323,12 @@ object Util {
         return time
     }
 
-    suspend fun generateGoogle(stream: Boolean, currentMessage: AtomicReference<String>, replyMessage: Message, originalMessage: Message) {
+    suspend fun generateGoogle(stream: Boolean, currentMessage: AtomicReference<String>, replyMessage: Message, originalMessage: Message, message: Message = originalMessage) {
         var lastUpdate = System.currentTimeMillis()
-        val contents = originalMessage.toGoogleContentList()
+        val contents = message.toGoogleContentList()
         val model = if (contents.hasImage()) "gemini-pro-vision" else "gemini-pro"
         val parameters = VertexAi.Parameters()
+        println("contents: $contents")
         if (!stream) {
             val response = BotConfig.instance.vertexAi.predict(model, contents, parameters)
             println(JsonFormat.printer().print(response))
@@ -347,7 +350,109 @@ object Util {
             }
             return
         }
-        BotConfig.instance.vertexAi.predictStreaming(model, contents, parameters).collect { response ->
+        val tools =
+            listOf(
+                Tool
+                    .newBuilder()
+                    .addAllFunctionDeclarations(listOf(
+                        FunctionDeclaration.newBuilder()
+                            .setName("get_messages")
+                            .setDescription("Get <count> messages before the current message")
+                            .setParameters(
+                                Schema.newBuilder()
+                                    .setType(Type.OBJECT)
+                                    .putProperties("count", Schema.newBuilder()
+                                        .setType(Type.NUMBER)
+                                        .setDescription("Number of messages to get (range: 100 - 1000) (default: 100)")
+                                        .build())
+                                    .putProperties("ref", Schema.newBuilder()
+                                        .setType(Type.BOOLEAN)
+                                        .setDescription("Whether to get messages from the referenced message (default: false)")
+                                        .build())
+                            )
+                            .build(),
+                        FunctionDeclaration.newBuilder()
+                            .setName("get_time")
+                            .setDescription("Get current date and time")
+                            .build(),
+                        FunctionDeclaration.newBuilder()
+                            .setName("set_remind")
+                            .setDescription("Set a reminder with the given time. Message is optional. DO NOT RETRY THIS FUNCTION. Get current time via `get_time` function.")
+                            .setParameters(
+                                Schema.newBuilder()
+                                    .setType(Type.OBJECT)
+                                    .putProperties("time", Schema.newBuilder()
+                                        .setType(Type.STRING)
+                                        .setDescription("Time to remind at (in the format of yyyy/MM/dd HH:mm:ss, or XyXmoXdXhXmXs where X is an number, each units can be omitted). If user says 'one year', you must say '1y'. If user says 'nine days' or '9 days', you must say '9d'. Get the current time via `get_time` function.")
+                                        .build())
+                                    .putProperties("period", Schema.newBuilder()
+                                        .setType(Type.STRING)
+                                        .setDescription("Period to remind with (in the format of XyXmoXdXhXmXs where X is an number, each units can be omitted) (optional; if not specified, it will be a one-time reminder)")
+                                        .build())
+                                    .putProperties("message", Schema.newBuilder()
+                                        .setType(Type.STRING)
+                                        .setDescription("Message to remind with. If an user input for this argument is provided, DO NOT MODIFY THE MESSAGE.")
+                                        .build())
+                                    .addRequired("time")
+                            )
+                            .build(),
+                        FunctionDeclaration.newBuilder()
+                            .setName("list_remind")
+                            .setDescription("List all reminds")
+                            .build(),
+                        FunctionDeclaration.newBuilder()
+                            .setName("delete_remind")
+                            .setDescription("Delete a remind with the given index")
+                            .setParameters(
+                                Schema.newBuilder()
+                                    .setType(Type.OBJECT)
+                                    .putProperties("index", Schema.newBuilder()
+                                        .setType(Type.STRING)
+                                        .setDescription("Index of the remind to delete (starts from 1)")
+                                        .build())
+                                    .addRequired("index")
+                            )
+                            .build(),
+                        FunctionDeclaration.newBuilder()
+                            .setName("clear_remind")
+                            .setDescription("Clear all reminds (requires confirmation)")
+                            .build(),
+                        FunctionDeclaration.newBuilder()
+                            .setName("get_github_repository_document")
+                            .setDescription("Get readme file from the given GitHub repository url")
+                            .setParameters(
+                                Schema.newBuilder()
+                                    .setType(Type.OBJECT)
+                                    .putProperties("url", Schema.newBuilder()
+                                        .setType(Type.STRING)
+                                        .setDescription("GitHub repository url (starts with https://github.com/...)")
+                                        .build())
+                                    .addRequired("url")
+                            )
+                            .build(),
+                        FunctionDeclaration.newBuilder()
+                            .setName("get_web_contents_by_url")
+                            .setDescription("Get web contents from the given url")
+                            .setParameters(
+                                Schema.newBuilder()
+                                    .setType(Type.OBJECT)
+                                    .putProperties("url", Schema.newBuilder()
+                                        .setType(Type.STRING)
+                                        .setDescription("URL to get web contents from (starts with https://)")
+                                        .build())
+                                    .putProperties("query", Schema.newBuilder()
+                                        .setType(Type.STRING)
+                                        .setDescription("Search query to get data related to the given query (usually this is an user input without url)")
+                                        .build())
+                                    .addRequired("url")
+                                    .addRequired("query")
+                            )
+                            .build(),
+                    ))
+                    .build()
+            )
+        val functions = mutableListOf<Pair<String, String>>()
+        BotConfig.instance.vertexAi.predictStreaming(model, contents, parameters, tools).collect { response ->
             if (response == null) {
                 if (currentMessage.get().isNotBlank()) {
                     replyMessage.edit {
@@ -366,13 +471,36 @@ object Util {
                         }
                     }
                 }
+                if (functions.isNotEmpty()) {
+                    functions.forEach { call ->
+                        val obj = if (call.second.isNotBlank() && call.second != "{}" && call.second != "{\n}") {
+                            val arguments = json.parseToJsonElement(call.second)
+                            JsonObject(arguments.jsonObject + mapOf("type" to JsonPrimitive(call.first)))
+                        } else {
+                            JsonObject(mapOf("type" to JsonPrimitive(call.first)))
+                        }
+                        val function = json.decodeFromJsonElement<Function>(obj)
+                        var added = false
+                        function.call(originalMessage) {
+                            if (added) error("Already added")
+                            added = true
+                            GoogleFunctionCalls.addFunctionResponse(replyMessage.id, call.first, JsonPrimitive(it))
+                        }
+                    }
+                    GoogleFunctionCalls.save()
+                    generateGoogle(true, currentMessage, replyMessage, originalMessage, replyMessage)
+                }
                 return@collect
             }
             val candidate = response.candidatesList.getOrNull(0)
             if (candidate != null && candidate.hasContent()) {
                 println(JsonFormat.printer().print(response))
-                val delta = candidate.content.partsList.getOrNull(0)?.text
-                if (delta != null) {
+                candidate.content.partsList.filter { it.hasFunctionCall() }.map { it.functionCall }.forEach { call ->
+                    functions += call.name to JsonFormat.printer().print(call.args)
+                    GoogleFunctionCalls.addFunctionCall(replyMessage.id, call)
+                }
+                val delta = candidate.content.partsList.filter { it.hasText() }.joinToString("") { it.text }
+                if (delta.isNotBlank()) {
                     currentMessage.set(currentMessage.get() + delta)
                 }
             }
@@ -392,11 +520,11 @@ object Util {
         }
     }
 
-    suspend fun generateOpenAI(currentMessage: AtomicReference<String>, replyMessage: Message, originalMessage: Message) {
+    suspend fun generateOpenAI(currentMessage: AtomicReference<String>, replyMessage: Message, originalMessage: Message, message: Message = originalMessage) {
         var lastUpdate = System.currentTimeMillis()
         val initialToolCallIndex = ToolCalls.toolCalls[replyMessage.id]?.size ?: 0
         val toolCalls = mutableListOf<AssistantToolCallData>()
-        createChatCompletions(originalMessage).collect { data ->
+        createChatCompletions(originalMessage, message).collect { data ->
             if (data.data == "[DONE]") {
                 if (currentMessage.get().isNotBlank()) {
                     replyMessage.edit {
@@ -442,13 +570,12 @@ object Util {
                             function.call(originalMessage) {
                                 if (added) error("Already added")
                                 added = true
-                                ToolCalls.addToolCall(initialToolCallIndex + (index * 2) + 1, replyMessage.id, ChatMessage.Tool("Function ${call.function!!.name} called successfully. Output:\n$it", ToolId(call.id)))
+                                ToolCalls.addToolCall(initialToolCallIndex + (index * 2) + 1, replyMessage.id, ChatMessage.Tool(it, ToolId(call.id)))
                             }
                         }
                     }
-                    println(ToolCalls.toolCalls[replyMessage.id])
                     ToolCalls.save()
-                    generateOpenAI(currentMessage, replyMessage, originalMessage)
+                    generateOpenAI(currentMessage, replyMessage, originalMessage, replyMessage)
                 }
                 return@collect
             }
@@ -597,8 +724,8 @@ suspend fun Message.toGoogleContentList(root: Boolean = true): List<Content> {
     if (thread == null) {
         referencedMessage?.toGoogleContentList(false)?.let { messages += it }
     }
-    //ToolCalls.toolCalls[id]?.let { messages += it }
-    if (ToolCalls.toolCalls[id] == null) {
+    GoogleFunctionCalls.functionCalls[id]?.let { messages += it.map(GoogleContent::toGoogle) }
+    if (GoogleFunctionCalls.functionCalls[id] == null) {
         if (author?.id == kord.selfId) {
             if (content.isNotBlank()) {
                 messages += createContent("model", listOf(createTextPart(content)))
@@ -644,6 +771,12 @@ val githubClient: GitHubClient? by lazy {
 
     //  create github client
     GitHubClient.create(URI.create("https://api.github.com/"), BotConfig.instance.githubAccessToken)
+}
+
+fun String.parseToStruct(): com.google.protobuf.Struct {
+    val value = com.google.protobuf.Struct.newBuilder()
+    JsonFormat.parser().merge(this, value)
+    return value.build()
 }
 
 fun JsonElement.toTensor(): Tensor = when (this) {

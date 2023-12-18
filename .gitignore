@@ -44,5 +44,7 @@ bin/
 
 config.yml
 tool_calls.json
+google_function_calls.json
 reminds.json
 service-account-credentials.json
+model_store.json
