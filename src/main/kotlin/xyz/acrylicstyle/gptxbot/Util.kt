@@ -109,7 +109,7 @@ object Util {
         val body = JsonObject(
             if (hasImage) {
                 mapOf(
-                    "model" to JsonPrimitive("gpt-4-vision-preview"),
+                    "model" to JsonPrimitive("gpt-4o"),
                     "messages" to messages,
                     "max_tokens" to JsonPrimitive(4096),
                     "user" to JsonPrimitive(message.author?.id?.toString() ?: "unknown"),
@@ -117,7 +117,7 @@ object Util {
                 )
             } else {
                 mapOf(
-                    "model" to JsonPrimitive("gpt-4-1106-preview"),
+                    "model" to JsonPrimitive("gpt-4o"),
                     "messages" to messages,
                     "user" to JsonPrimitive(message.author?.id?.toString() ?: "unknown"),
                     "stream" to JsonPrimitive(true),
