@@ -6,14 +6,19 @@ import dev.kord.core.behavior.reply
 import dev.kord.core.entity.channel.TextChannel
 import dev.kord.core.entity.channel.thread.ThreadChannel
 import dev.kord.core.event.gateway.ReadyEvent
+import dev.kord.core.event.interaction.ApplicationCommandCreateEvent
+import dev.kord.core.event.interaction.ApplicationCommandInteractionCreateEvent
 import dev.kord.core.event.message.MessageCreateEvent
 import dev.kord.core.on
 import dev.kord.gateway.Intent
 import dev.kord.gateway.Intents
 import dev.kord.gateway.NON_PRIVILEGED
 import dev.kord.gateway.PrivilegedIntent
+import dev.kord.rest.builder.interaction.string
 import org.slf4j.LoggerFactory
+import xyz.acrylicstyle.gptxbot.commands.AskCommand
 import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
+import xyz.acrylicstyle.gptxbot.message.EditableMessage
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 
@@ -25,9 +30,25 @@ suspend fun main() {
 
     val client = Kord(BotConfig.instance.token)
 
+    val commands = mapOf(
+        "ask" to AskCommand,
+    )
+
     client.on<ReadyEvent> {
         SetRemindFunction.load(client)
         logger.info("Logged in as ${client.getSelf().username}")
+    }
+
+    client.createGlobalApplicationCommands {
+        commands.forEach { (_, command) ->
+            command.register(this)
+        }
+    }
+
+    client.on<ApplicationCommandInteractionCreateEvent> {
+        if (interaction.user.isBot) return@on
+        val command = commands[interaction.invokedCommandName] ?: return@on
+        command.handle(interaction)
     }
 
     client.on<MessageCreateEvent> {
@@ -77,7 +98,7 @@ suspend fun main() {
         when (type) {
             "google" -> Util.generateGoogle(true, currentMessage, msg, message)
             "google-nostream" -> Util.generateGoogle(false, currentMessage, msg, message)
-            else -> Util.generateOpenAI(currentMessage, msg, message)
+            else -> Util.generateOpenAI(currentMessage, EditableMessage.adapt(msg), EditableMessage.adapt(message))
         }
     }
 

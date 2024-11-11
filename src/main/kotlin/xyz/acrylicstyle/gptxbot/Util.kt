@@ -15,6 +15,9 @@ import dev.kord.core.behavior.edit
 import dev.kord.core.entity.Message
 import dev.kord.core.entity.channel.TopGuildMessageChannel
 import dev.kord.core.entity.channel.thread.ThreadChannel
+import dev.kord.core.entity.interaction.ApplicationCommandInteraction
+import dev.kord.core.entity.interaction.Interaction
+import dev.kord.core.entity.interaction.ModalSubmitInteraction
 import dev.kord.rest.builder.message.embed
 import io.ktor.client.request.forms.*
 import io.ktor.utils.io.jvm.javaio.*
@@ -24,6 +27,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import xyz.acrylicstyle.gptxbot.function.Function
+import xyz.acrylicstyle.gptxbot.message.EditableMessage
 import xyz.acrylicstyle.gptxbot.struct.GoogleContent
 import java.io.ByteArrayInputStream
 import java.net.HttpURLConnection
@@ -44,8 +48,8 @@ object Util {
         encodeDefaults = true
     }
 
-    fun trimContent(message: Message): String {
-        var trimmed = message.content.replace("<@!?${message.kord.selfId}>".toRegex(), "").trim()
+    fun trimContent(message: EditableMessage): String {
+        var trimmed = message.originalContent.replace("<@!?${message.kord.selfId}>".toRegex(), "").trim()
         if (trimmed.isBlank()) return ""
         val firstMatch = "\\|\\|[a-z0-9_\\-]+\\|\\|".toRegex().find(trimmed)
         if (firstMatch != null) {
@@ -101,8 +105,19 @@ object Util {
             }
         }.flowOn(Dispatchers.IO)
 
-    suspend fun createChatCompletions(message: Message, messageToFetchList: Message): Flow<EventData> {
-        val messageList = messageToFetchList.toChatMessageList()
+    suspend fun createChatCompletions(message: EditableMessage, messageToFetchList: EditableMessage): Flow<EventData> {
+        val messageList = if (messageToFetchList.message is Message) {
+            (messageToFetchList.message as Message).toChatMessageList()
+        } else {
+            mutableListOf<ChatMessage>().apply {
+                messageToFetchList.author?.id?.run {
+                    getUserData(this)?.jsonObject?.get("default_instruction")?.jsonPrimitive?.contentOrNull?.let { instruction ->
+                        add(ChatMessage.System(instruction))
+                    }
+                }
+                add(ChatMessage.User(trimContent(messageToFetchList)))
+            }
+        }
         val hasImage = messageList.hasImage()
         val messages = messageList.let { Json.encodeToJsonElement(it) }
         println("contents: $messages")
@@ -520,27 +535,18 @@ object Util {
         }
     }
 
-    suspend fun generateOpenAI(currentMessage: AtomicReference<String>, replyMessage: Message, originalMessage: Message, message: Message = originalMessage) {
+    suspend fun generateOpenAI(currentMessage: AtomicReference<String>, replyMessage: EditableMessage, originalMessage: EditableMessage, message: EditableMessage = originalMessage) {
         var lastUpdate = System.currentTimeMillis()
         val initialToolCallIndex = ToolCalls.toolCalls[replyMessage.id]?.size ?: 0
         val toolCalls = mutableListOf<AssistantToolCallData>()
         createChatCompletions(originalMessage, message).collect { data ->
             if (data.data == "[DONE]") {
                 if (currentMessage.get().isNotBlank()) {
-                    replyMessage.edit {
-                        if (currentMessage.get().length > 2000) {
-                            content = ""
-                            embed {
-                                description = currentMessage.get().capAtLength(4000)
-                            }
-                        } else {
-                            content = currentMessage.get()
-                        }
-                        if (currentMessage.get().length > 500) {
-                            ByteArrayInputStream(currentMessage.get().toByteArray()).use { stream ->
-                                addFile("output.md", ChannelProvider { stream.toByteReadChannel() })
-                            }
-                        }
+                    if (currentMessage.get().length < 2000) {
+                        replyMessage.edit(currentMessage.get())
+                    }
+                    if (currentMessage.get().length > 500) {
+                        replyMessage.addFile("output.md", currentMessage.get().toByteArray())
                     }
                 }
                 if (toolCalls.isNotEmpty()) {
@@ -556,7 +562,7 @@ object Util {
                     println("Adding assistant tool call: " + json.encodeToJsonElement(chatMessage))
                     ToolCalls.addToolCall(replyMessage.id, chatMessage)
                 }
-                if (ToolCalls.toolCalls[replyMessage.id] != null && currentMessage.get().isBlank()) {
+                if (originalMessage.message is Message && ToolCalls.toolCalls[replyMessage.id] != null && currentMessage.get().isBlank()) {
                     toolCalls.forEachIndexed { index, call ->
                         if (call.function?.name?.isNotBlank() == true) {
                             val obj = if (call.function!!.arguments.isNotBlank() && call.function!!.arguments != "{}") {
@@ -567,7 +573,7 @@ object Util {
                             }
                             val function = json.decodeFromJsonElement<Function>(obj)
                             var added = false
-                            function.call(originalMessage) {
+                            function.call(originalMessage.message as Message) {
                                 if (added) error("Already added")
                                 added = true
                                 ToolCalls.addToolCall(initialToolCallIndex + (index * 2) + 1, replyMessage.id, ChatMessage.Tool(it, ToolId(call.id)))
@@ -603,17 +609,39 @@ object Util {
             if (System.currentTimeMillis() - lastUpdate < 1000) return@collect
             lastUpdate = System.currentTimeMillis()
             if (currentMessage.get().length in 1..2000) {
-                replyMessage.edit { content = currentMessage.get() }
-            } else if (currentMessage.get().length > 2000) {
-                replyMessage.edit {
-                    content = ""
-                    embed {
-                        description = currentMessage.get().capAtLength(4000)
-                    }
-                }
+                replyMessage.edit(currentMessage.get().capAtLength(2000))
             }
         }
     }
+
+    fun Interaction.optAny(name: String): Any? =
+        when (this) {
+            is ApplicationCommandInteraction ->
+                this.data
+                    .data
+                    .options
+                    .value
+                    ?.find { it.name == name }
+                    ?.value
+                    ?.value
+                    ?.value
+
+            is ModalSubmitInteraction ->
+                this.textInputs[name]?.value
+                    ?: this.data.data.options.value?.find { it.name == name }?.value?.value?.value
+
+            else -> null
+        }
+
+    fun Interaction.optString(name: String) = optAny(name)?.toString()
+
+    fun Interaction.optSnowflake(name: String) = optString(name)?.toULong()?.let { Snowflake(it) }
+
+    fun Interaction.optLong(name: String) = optDouble(name)?.toLong()
+
+    fun Interaction.optDouble(name: String) = optString(name)?.toDouble()
+
+    fun Interaction.optBoolean(name: String) = optString(name)?.toBoolean()
 }
 
 @JvmName("List_ChatMessage_hasImage")
@@ -648,14 +676,14 @@ suspend fun Message.toChatMessageList(root: Boolean = true): List<ChatMessage> {
     if (thread == null) {
         referencedMessage?.toChatMessageList(false)?.let { messages += it }
     }
-    ToolCalls.toolCalls[id]?.let { messages += it }
-    if (ToolCalls.toolCalls[id] == null) {
+    ToolCalls.toolCalls[id.toString()]?.let { messages += it }
+    if (ToolCalls.toolCalls[id.toString()] == null) {
         if (author?.id == kord.selfId) {
             if (content.isNotBlank()) {
                 messages += ChatMessage.Assistant(content)
             }
         } else {
-            val trimmedContent = Util.trimContent(this)
+            val trimmedContent = Util.trimContent(EditableMessage.adapt(this))
             if (trimmedContent.isNotBlank()) {
                 messages += ChatMessage.User(trimmedContent)
             }
@@ -732,7 +760,7 @@ suspend fun Message.toGoogleContentList(root: Boolean = true): List<Content> {
             }
         } else {
             val parts = mutableListOf<Part>()
-            val trimmedContent = Util.trimContent(this)
+            val trimmedContent = Util.trimContent(EditableMessage.adapt(this))
             if (trimmedContent.isNotBlank()) {
                 parts += createTextPart(trimmedContent)
             }
