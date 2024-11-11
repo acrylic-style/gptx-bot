@@ -29,7 +29,11 @@ object AskCommand : CommandHandler {
                 required = true
             }
         }
-        builder.user("Ask a question with GPT-4o")
-        builder.message("Ask a question with GPT-4o")
+        builder.user("Ask a question with GPT-4o") {
+            dmPermission = true
+        }
+        builder.message("Ask a question with GPT-4o") {
+            dmPermission = true
+        }
     }
 }
