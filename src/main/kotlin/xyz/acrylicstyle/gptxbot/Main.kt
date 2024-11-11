@@ -2,11 +2,12 @@
 package xyz.acrylicstyle.gptxbot
 
 import dev.kord.core.Kord
+import dev.kord.core.behavior.interaction.respondPublic
 import dev.kord.core.behavior.reply
 import dev.kord.core.entity.channel.TextChannel
 import dev.kord.core.entity.channel.thread.ThreadChannel
 import dev.kord.core.event.gateway.ReadyEvent
-import dev.kord.core.event.interaction.ApplicationCommandCreateEvent
+import dev.kord.core.event.interaction.ActionInteractionCreateEvent
 import dev.kord.core.event.interaction.ApplicationCommandInteractionCreateEvent
 import dev.kord.core.event.message.MessageCreateEvent
 import dev.kord.core.on
@@ -14,8 +15,8 @@ import dev.kord.gateway.Intent
 import dev.kord.gateway.Intents
 import dev.kord.gateway.NON_PRIVILEGED
 import dev.kord.gateway.PrivilegedIntent
-import dev.kord.rest.builder.interaction.string
 import org.slf4j.LoggerFactory
+import xyz.acrylicstyle.gptxbot.Util.optString
 import xyz.acrylicstyle.gptxbot.commands.AskCommand
 import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
 import xyz.acrylicstyle.gptxbot.message.EditableMessage
@@ -49,6 +50,20 @@ suspend fun main() {
         if (interaction.user.isBot) return@on
         val command = commands[interaction.invokedCommandName] ?: return@on
         command.handle(interaction)
+    }
+
+    client.on<ActionInteractionCreateEvent> {
+        if (interaction.user.isBot) return@on
+        println(interaction)
+        println(interaction.data.message.value)
+        println(interaction.data.message.value?.components?.value)
+        println(interaction.data.message.value?.components?.value?.find { it.customId.value == "question" })
+        println(interaction.optString("query"))
+        val input = interaction.data.message.value?.components?.value?.find { it.customId.value == "input" }?.value?.value ?: return@on
+        val reply = interaction.respondPublic { content = "考え中..." }
+        val currentMessage = AtomicReference("")
+        val message = EditableMessage.adapt(reply, interaction.user, input)
+        Util.generateOpenAI(currentMessage, message, message)
     }
 
     client.on<MessageCreateEvent> {
