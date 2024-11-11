@@ -1,7 +1,9 @@
 @file:JvmName("MainKt")
 package xyz.acrylicstyle.gptxbot
 
+import dev.kord.common.entity.TextInputStyle
 import dev.kord.core.Kord
+import dev.kord.core.behavior.interaction.modal
 import dev.kord.core.behavior.interaction.respondPublic
 import dev.kord.core.behavior.reply
 import dev.kord.core.entity.channel.TextChannel
@@ -9,6 +11,8 @@ import dev.kord.core.entity.channel.thread.ThreadChannel
 import dev.kord.core.event.gateway.ReadyEvent
 import dev.kord.core.event.interaction.ActionInteractionCreateEvent
 import dev.kord.core.event.interaction.ApplicationCommandInteractionCreateEvent
+import dev.kord.core.event.interaction.MessageCommandInteractionCreateEvent
+import dev.kord.core.event.interaction.UserCommandInteractionCreateEvent
 import dev.kord.core.event.message.MessageCreateEvent
 import dev.kord.core.on
 import dev.kord.gateway.Intent
@@ -46,20 +50,48 @@ suspend fun main() {
         }
     }
 
+    client.createGlobalUserCommand("Ask a question with GPT-4o") {
+        this.dmPermission = true
+    }
+
+    client.createGlobalMessageCommand("Ask a question with GPT-4o") {
+        this.dmPermission = true
+    }
+
     client.on<ApplicationCommandInteractionCreateEvent> {
         if (interaction.user.isBot) return@on
         val command = commands[interaction.invokedCommandName] ?: return@on
         command.handle(interaction)
     }
 
+    client.on<MessageCommandInteractionCreateEvent> {
+        if (interaction.user.isBot) return@on
+        interaction.modal("Ask a question", "question") {
+            actionRow {
+                textInput(TextInputStyle.Paragraph, "input", "Input") {
+                    required = true
+                    placeholder = "Type your input here"
+                }
+            }
+        }
+    }
+
+    client.on<UserCommandInteractionCreateEvent> {
+        if (interaction.user.isBot) return@on
+        interaction.modal("Ask a question", "question") {
+            actionRow {
+                textInput(TextInputStyle.Paragraph, "input", "Input") {
+                    required = true
+                    placeholder = "Type your input here"
+                }
+            }
+        }
+    }
+
     client.on<ActionInteractionCreateEvent> {
         if (interaction.user.isBot) return@on
-        println(interaction)
-        println(interaction.data.message.value)
-        println(interaction.data.message.value?.components?.value)
-        println(interaction.data.message.value?.components?.value?.find { it.customId.value == "question" })
-        println(interaction.optString("query"))
-        val input = interaction.data.message.value?.components?.value?.find { it.customId.value == "input" }?.value?.value ?: return@on
+        val questionModal = interaction.data.data.components.value?.getOrNull(0)
+        val input = questionModal?.components?.value?.find { it.customId.value == "input" }?.value?.value ?: return@on
         val reply = interaction.respondPublic { content = "考え中..." }
         val currentMessage = AtomicReference("")
         val message = EditableMessage.adapt(reply, interaction.user, input)
