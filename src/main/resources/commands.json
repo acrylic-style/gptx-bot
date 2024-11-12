@@ -18,7 +18,7 @@
         "type": 3,
         "name": "input",
         "description": "Input string",
-        "required": true
+        "required": false
       }
     ],
     "nsfw": false
@@ -42,7 +42,7 @@
         "type": 3,
         "name": "input",
         "description": "Input string",
-        "required": true
+        "required": false
       }
     ],
     "nsfw": false

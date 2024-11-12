@@ -4,6 +4,7 @@ package xyz.acrylicstyle.gptxbot
 import dev.kord.common.entity.TextInputStyle
 import dev.kord.core.Kord
 import dev.kord.core.behavior.interaction.modal
+import dev.kord.core.behavior.interaction.respondEphemeral
 import dev.kord.core.behavior.interaction.respondPublic
 import dev.kord.core.behavior.reply
 import dev.kord.core.entity.channel.TextChannel
@@ -91,10 +92,17 @@ suspend fun main() {
     client.on<ActionInteractionCreateEvent> {
         if (interaction.user.isBot) return@on
         val questionModal = interaction.data.data.components.value?.getOrNull(0)
-        val input = questionModal?.components?.value?.find { it.customId.value == "input" }?.value?.value ?: return@on
-        val reply = interaction.respondPublic { content = "考え中..." }
+        val private = questionModal?.components?.value?.find { it.customId.value == "input-private" }?.value?.value
+        val input = questionModal?.components?.value?.find { it.customId.value == "input" }?.value?.value
+        val reply = if (private != null) {
+            interaction.respondEphemeral { content = "考え中..." }
+        } else if (input != null) {
+            interaction.respondPublic { content = "考え中..." }
+        } else {
+            return@on
+        }
         val currentMessage = AtomicReference("")
-        val message = EditableMessage.adapt(reply, interaction.user, input)
+        val message = EditableMessage.adapt(reply, interaction.user, private ?: input!!)
         Util.generateOpenAI(currentMessage, message, message)
     }
 

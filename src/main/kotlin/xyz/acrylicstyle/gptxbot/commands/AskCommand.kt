@@ -15,7 +15,17 @@ object AskCommand : CommandHandler {
     override suspend fun canProcess(interaction: ApplicationCommandInteraction): Boolean = true
 
     override suspend fun handle0(interaction: ApplicationCommandInteraction) {
-        val input = interaction.optString("input") ?: return
+        val input = interaction.optString("input") ?: run {
+            interaction.modal("Ask a question", "question") {
+                actionRow {
+                    textInput(TextInputStyle.Paragraph, "input", "Input") {
+                        required = true
+                        placeholder = "Type your input here"
+                    }
+                }
+            }
+            return
+        }
         val reply = interaction.respondPublic { content = "考え中..." }
         val currentMessage = AtomicReference("")
         val message = EditableMessage.adapt(reply, interaction.user, input)
@@ -25,9 +35,7 @@ object AskCommand : CommandHandler {
     override fun register(builder: GlobalMultiApplicationCommandBuilder) {
         builder.input("ask", "Ask a question") {
             dmPermission = true
-            string("input", "Input string") {
-                required = true
-            }
+            string("input", "Input string")
         }
     }
 }
