@@ -1,7 +1,6 @@
 @file:JvmName("MainKt")
 package xyz.acrylicstyle.gptxbot
 
-import dev.kord.common.Locale
 import dev.kord.common.entity.TextInputStyle
 import dev.kord.core.Kord
 import dev.kord.core.behavior.interaction.modal
@@ -27,8 +26,8 @@ import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import org.slf4j.LoggerFactory
-import xyz.acrylicstyle.gptxbot.Util.optString
 import xyz.acrylicstyle.gptxbot.commands.AskCommand
+import xyz.acrylicstyle.gptxbot.commands.AskPrivateCommand
 import xyz.acrylicstyle.gptxbot.function.SetRemindFunction
 import xyz.acrylicstyle.gptxbot.message.EditableMessage
 import java.io.File
@@ -44,6 +43,7 @@ suspend fun main() {
 
     val commands = mapOf(
         "ask" to AskCommand,
+        "ask-private" to AskPrivateCommand,
     )
 
     client.on<ReadyEvent> {

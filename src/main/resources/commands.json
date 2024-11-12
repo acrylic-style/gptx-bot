@@ -22,5 +22,29 @@
       }
     ],
     "nsfw": false
+  },
+  {
+    "type": 1,
+    "name": "ask-private",
+    "description": "Ask a question privately",
+    "dm_permission": true,
+    "contexts": [
+      0,
+      1,
+      2
+    ],
+    "integration_types": [
+      0,
+      1
+    ],
+    "options": [
+      {
+        "type": 3,
+        "name": "input",
+        "description": "Input string",
+        "required": true
+      }
+    ],
+    "nsfw": false
   }
 ]

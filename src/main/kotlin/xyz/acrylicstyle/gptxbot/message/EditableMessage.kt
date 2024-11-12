@@ -2,6 +2,7 @@ package xyz.acrylicstyle.gptxbot.message
 
 import dev.kord.core.Kord
 import dev.kord.core.behavior.edit
+import dev.kord.core.behavior.interaction.response.MessageInteractionResponseBehavior
 import dev.kord.core.behavior.interaction.response.PublicMessageInteractionResponseBehavior
 import dev.kord.core.behavior.interaction.response.edit
 import dev.kord.core.entity.Message
@@ -43,7 +44,7 @@ interface EditableMessage {
                 }
             }
 
-        fun adapt(message: PublicMessageInteractionResponseBehavior, author: User, content: String) =
+        fun adapt(message: MessageInteractionResponseBehavior, author: User, content: String) =
             object : EditableMessage {
                 override val message: Any = message
                 override val id: String = message.token.toString()
