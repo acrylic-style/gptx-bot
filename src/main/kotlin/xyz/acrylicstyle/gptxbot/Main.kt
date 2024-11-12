@@ -1,6 +1,7 @@
 @file:JvmName("MainKt")
 package xyz.acrylicstyle.gptxbot
 
+import dev.kord.common.Locale
 import dev.kord.common.entity.TextInputStyle
 import dev.kord.core.Kord
 import dev.kord.core.behavior.interaction.modal
@@ -19,6 +20,12 @@ import dev.kord.gateway.Intent
 import dev.kord.gateway.Intents
 import dev.kord.gateway.NON_PRIVILEGED
 import dev.kord.gateway.PrivilegedIntent
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.request.header
+import io.ktor.client.request.put
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import org.slf4j.LoggerFactory
 import xyz.acrylicstyle.gptxbot.Util.optString
 import xyz.acrylicstyle.gptxbot.commands.AskCommand
@@ -44,19 +51,12 @@ suspend fun main() {
         logger.info("Logged in as ${client.getSelf().username}")
     }
 
-    client.createGlobalApplicationCommands {
-        commands.forEach { (_, command) ->
-            command.register(this)
-        }
-    }
-
-    client.createGlobalUserCommand("Ask a question with GPT-4o") {
-        this.dmPermission = true
-    }
-
-    client.createGlobalMessageCommand("Ask a question with GPT-4o") {
-        this.dmPermission = true
-    }
+    // register commands
+    HttpClient(OkHttp).put("https://discord.com/api/v10/applications/1172219387818819625/commands") {
+        setBody(this::class.java.getResourceAsStream("/commands.json")!!.readBytes())
+        header("Authorization", "Bot ${BotConfig.instance.token}")
+        header("Content-Type", "application/json")
+    }.bodyAsText().let { logger.info(it) }
 
     client.on<ApplicationCommandInteractionCreateEvent> {
         if (interaction.user.isBot) return@on

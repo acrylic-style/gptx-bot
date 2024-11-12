@@ -25,15 +25,9 @@ object AskCommand : CommandHandler {
     override fun register(builder: GlobalMultiApplicationCommandBuilder) {
         builder.input("ask", "Ask a question") {
             dmPermission = true
-            string("input", "Input") {
+            string("input", "Input string") {
                 required = true
             }
-        }
-        builder.user("Ask a question with GPT-4o") {
-            dmPermission = true
-        }
-        builder.message("Ask a question with GPT-4o") {
-            dmPermission = true
         }
     }
 }

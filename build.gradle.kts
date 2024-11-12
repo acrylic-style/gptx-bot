@@ -1,14 +1,14 @@
 plugins {
-    kotlin("jvm") version "1.9.21"
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.21"
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    kotlin("jvm") version "2.0.21"
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.0.21"
+    id("com.gradleup.shadow") version "8.3.3"
 }
 
 allprojects {
     apply {
         plugin("org.jetbrains.kotlin.jvm")
         plugin("org.jetbrains.kotlin.plugin.serialization")
-        plugin("com.github.johnrengelman.shadow")
+        plugin("com.gradleup.shadow")
     }
 
     group = "xyz.acrylicstyle"
@@ -22,7 +22,7 @@ allprojects {
 val dockerJavaVersion = "3.3.4"
 
 dependencies {
-    implementation("dev.kord:kord-core:0.12.0")
+    implementation("dev.kord:kord-core:0.15.0")
     implementation("org.slf4j:slf4j-simple:2.0.1")
     implementation("com.charleskorn.kaml:kaml:0.55.0") // YAML support for kotlinx.serialization
     implementation("com.aallam.openai:openai-client:3.6.0")

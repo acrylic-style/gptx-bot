@@ -1,7 +1,7 @@
 package xyz.acrylicstyle.gptxbot.vector
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
+import io.ktor.client.engine.okhttp.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import kotlinx.serialization.encodeToString
@@ -10,11 +10,7 @@ import xyz.acrylicstyle.gptxbot.BotConfig
 import xyz.acrylicstyle.gptxbot.toJsonElement
 
 class VectorOpenAI(private val database: VectorDatabase) {
-    private val client = HttpClient(CIO) {
-        engine {
-            requestTimeout = 1000 * 60 * 5
-        }
-    }
+    private val client = HttpClient(OkHttp)
 
     suspend fun embedding(text: String): DoubleArray =
         client.post("https://api.openai.com/v1/embeddings") {

@@ -1,14 +1,14 @@
 package xyz.acrylicstyle.gptxbot
 
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
+import io.ktor.client.engine.okhttp.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 
 data class CloudflareKV(val accountId: String, val namespaceId: String) {
     companion object {
-        val client = HttpClient(CIO)
+        val client = HttpClient(OkHttp)
     }
 
     suspend fun get(key: String): String? =
